@@ -1,16 +1,20 @@
 import type { AlertLevel, HourlyPrice, PushPayload, Thresholds } from './types.js';
 
-export const DEFAULT_THRESHOLDS: Thresholds = { red: -20, amber: 0 };
+export const DEFAULT_THRESHOLDS: Thresholds = { green: -20, amber: 0, blue: 15 };
 
 export function eurMWhToCentPerKwh(eurMWh: number): number {
     return eurMWh / 10;
 }
 
+export function formatEuroPrice(centPerKwh: number): string {
+    return '€' + (centPerKwh / 100).toFixed(4).replace('.', ',');
+}
+
 export function getAlertLevel(centPerKwh: number, thresholds: Thresholds): AlertLevel {
-    if (centPerKwh <= thresholds.red) return 'red';
-    if (centPerKwh <= thresholds.amber) return 'amber';
-    if (centPerKwh <= 10) return 'green';
-    return 'normal';
+    if (centPerKwh <= thresholds.green) return 'green'; // making money
+    if (centPerKwh <= thresholds.amber) return 'blue';  // below zero
+    if (centPerKwh <= thresholds.blue) return 'amber';  // cheap
+    return 'red';                                        // expensive
 }
 
 export function getTodayBelgian(): string {
@@ -47,21 +51,21 @@ export function formatBelgianDate(dateStr: string): string {
 
 export function getPushPayload(price: HourlyPrice): PushPayload {
     const messages: Record<AlertLevel, { title: string; body: string }> = {
-        red: {
-            title: '🔴 Negatieve stroomprijs!',
-            body: `Prijs nu ${price.centPerKwh.toFixed(1)}¢/kWh — u verdient geld bij stroomverbruik!`
+        green: {
+            title: '🟢 Negatieve stroomprijs!',
+            body: `Prijs nu ${formatEuroPrice(price.centPerKwh)}/kWh — u verdient geld bij stroomverbruik!`
+        },
+        blue: {
+            title: '🔵 Stroomprijs onder nul',
+            body: `Prijs nu ${formatEuroPrice(price.centPerKwh)}/kWh — bijna gratis stroom!`
         },
         amber: {
-            title: '🟡 Stroomprijs onder nul',
-            body: `Prijs nu ${price.centPerKwh.toFixed(1)}¢/kWh — bijna gratis stroom!`
+            title: '🟡 Goedkope stroom',
+            body: `Prijs nu ${formatEuroPrice(price.centPerKwh)}/kWh — goedkoop moment!`
         },
-        green: {
-            title: '🟢 Goedkope stroom',
-            body: `Prijs nu ${price.centPerKwh.toFixed(1)}¢/kWh — goedkoop moment!`
-        },
-        normal: {
-            title: 'Stroomprijs update',
-            body: `Prijs nu ${price.centPerKwh.toFixed(1)}¢/kWh`
+        red: {
+            title: '🔴 Dure stroom!',
+            body: `Prijs nu ${formatEuroPrice(price.centPerKwh)}/kWh — stroomprijs is hoog!`
         }
     };
     const msg = messages[price.alertLevel];

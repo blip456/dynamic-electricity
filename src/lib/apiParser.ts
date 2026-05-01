@@ -9,7 +9,52 @@ import { DEFAULT_THRESHOLDS } from './priceUtils.js';
 import type { HourlyPrice, Thresholds } from './types.js';
 
 // ---------------------------------------------------------------------------
-// Primary source: APX Group REST API (used by Eneco BE, no auth required)
+// Primary source: Eneco BE Dynamic Pricing API (no auth required)
+// ---------------------------------------------------------------------------
+const ENECO_URL =
+    'https://api-prd.be-digitalcore.enecogroup.com/eneco-be/xapi/site/api/v1/pricing/dynamic';
+
+export async function fetchFromEneco(
+    dateStr: string,
+    thresholds: Thresholds = DEFAULT_THRESHOLDS
+): Promise<HourlyPrice[]> {
+    const params = new URLSearchParams({
+        startDate: dateStr,
+        endDate: dateStr,
+        aggregation: 'hourly'
+    });
+
+    const res = await fetch(`${ENECO_URL}?${params}`, {
+        next: { revalidate: 3600 }
+    } as RequestInit);
+    if (!res.ok) throw new Error(`Eneco HTTP ${res.status}`);
+
+    const body = await res.json();
+    const records: Array<{ date: string; time: string; price: number }> =
+        body?.data?.records;
+
+    if (!Array.isArray(records) || records.length === 0) {
+        throw new Error('Eneco: no records found in response');
+    }
+
+    return records.map((record) => {
+        const hour = Number(record.time.split(':')[0]);
+        const eurMWh = record.price;
+        const centPerKwh = eurMWhToCentPerKwh(eurMWh);
+        const utcMs =
+            getMidnightBrusselsAsUTC(dateStr).getTime() + hour * 3_600_000;
+        return {
+            hour,
+            eurMWh,
+            centPerKwh,
+            alertLevel: getAlertLevel(centPerKwh, thresholds),
+            isoTimestamp: new Date(utcMs).toISOString()
+        };
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Secondary source: APX Group REST API (used by Eneco BE, no auth required)
 // ---------------------------------------------------------------------------
 const APX_URL = 'http://www.apxgroup.com/rest-api/quotes/';
 

@@ -3,10 +3,12 @@
     import { browser } from '$app/environment';
     import { settings } from '$lib/stores.svelte.js';
     import { subscribeToPush, unsubscribeFromPush, getNotificationPermission } from '$lib/notifications.js';
+    import { formatEuroPrice } from '$lib/priceUtils.js';
 
     let { data } = $props();
 
     let notifStatus = $state<'idle' | 'loading' | 'error'>('idle');
+    let testStatus = $state<'idle' | 'loading' | 'success' | 'error'>('idle');
     let permissionState = $state<NotificationPermission>('default');
 
     $effect(() => {
@@ -41,6 +43,25 @@
             console.error(e);
             notifStatus = 'error';
         }
+    }
+
+    async function testNotification() {
+        if (!('serviceWorker' in navigator)) return;
+        testStatus = 'loading';
+        try {
+            const registration = await navigator.serviceWorker.ready;
+            const sub = await registration.pushManager.getSubscription();
+            if (!sub) { testStatus = 'error'; return; }
+            const res = await fetch('/api/notify/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ subscription: sub.toJSON() })
+            });
+            testStatus = res.ok ? 'success' : 'error';
+        } catch {
+            testStatus = 'error';
+        }
+        setTimeout(() => (testStatus = 'idle'), 3000);
     }
 
     function clamp(value: number, min: number, max: number) {
@@ -93,7 +114,7 @@
                     <div>
                         <p class="text-sm font-medium text-foreground">Prijswaarschuwingen</p>
                         <p class="text-xs text-muted-foreground mt-0.5">
-                            Ontvang meldingen bij rode en oranje prijsalerts, ook als de app gesloten is.
+                            Ontvang meldingen bij groene (verdien geld), blauwe (onder nul) en rode (dure) prijzen, ook als de app gesloten is.
                         </p>
                     </div>
                     <button
@@ -121,44 +142,70 @@
                         Kon meldingen niet inschakelen. Controleer of je de permissie hebt gegeven.
                     </p>
                 {/if}
+
+                {#if settings.notificationsEnabled}
+                    <div class="flex items-center justify-between">
+                        <p class="text-xs text-muted-foreground">Stuur een testmelding naar dit apparaat.</p>
+                        <button
+                            onclick={testNotification}
+                            disabled={testStatus === 'loading'}
+                            class="flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium bg-accent text-accent-foreground hover:bg-border transition-colors disabled:opacity-50"
+                        >
+                            {#if testStatus === 'loading'}
+                                <span class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                            {:else if testStatus === 'success'}
+                                ✓ Verzonden!
+                            {:else if testStatus === 'error'}
+                                ✗ Mislukt
+                            {:else}
+                                <Bell size={14} />
+                                Test melding
+                            {/if}
+                        </button>
+                    </div>
+                {/if}
             </div>
         </section>
 
         <!-- Alert thresholds section -->
         <section class="bg-card rounded-2xl border shadow-sm overflow-hidden">
-            <div class="px-4 py-3 border-b">
+            <div class="px-4 py-3 border-b flex items-center justify-between">
                 <h2 class="text-sm font-semibold text-foreground flex items-center gap-2">
                     <Zap size={16} />
-                    Drempelwaarden (¢/kWh)
+                    Drempelwaarden (€/kWh)
                 </h2>
+                <button
+                    onclick={() => settings.reset()}
+                    class="text-xs px-2.5 py-1 rounded-lg bg-accent hover:bg-border text-muted-foreground hover:text-foreground transition-colors"
+                >
+                    Standaard herstellen
+                </button>
             </div>
 
             <div class="p-4 flex flex-col gap-5">
 
-                <!-- Red threshold -->
+                <!-- Green threshold -->
                 <div>
                     <div class="flex items-center justify-between mb-2">
                         <div class="text-sm font-medium text-foreground flex items-center gap-1.5">
-                            <span class="w-2 h-2 rounded-full bg-red-500"></span>
-                            Rode alert
+                            <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                            Groen — verdien geld
                         </div>
                         <div class="flex items-center gap-1">
                             <button
-                                onclick={() => { settings.red = clamp(settings.red - 5, -100, settings.amber - 1); }}
+                                onclick={() => { settings.green = clamp(settings.green - 5, -100, settings.amber - 1); settings.save(); }}
                                 class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
                             >−</button>
-                            <span class="text-sm font-mono w-14 text-center tabular-nums">
-                                ≤ {settings.red}¢
+                            <span class="text-sm font-mono w-24 text-center tabular-nums">
+                                ≤ {formatEuroPrice(settings.green)}
                             </span>
                             <button
-                                onclick={() => { settings.red = clamp(settings.red + 5, -100, settings.amber - 1); }}
+                                onclick={() => { settings.green = clamp(settings.green + 5, -100, settings.amber - 1); settings.save(); }}
                                 class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
                             >+</button>
                         </div>
                     </div>
-                    <p class="text-xs text-muted-foreground">
-                        Negatieve prijs die voldoende is om vaste kosten te dekken (u verdient effectief geld).
-                    </p>
+                    <p class="text-xs text-muted-foreground">Prijs is negatief genoeg dat u effectief geld verdient.</p>
                 </div>
 
                 <div class="border-t"></div>
@@ -167,34 +214,57 @@
                 <div>
                     <div class="flex items-center justify-between mb-2">
                         <div class="text-sm font-medium text-foreground flex items-center gap-1.5">
-                            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-                            Oranje alert
+                            <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                            Blauw — onder nul
                         </div>
                         <div class="flex items-center gap-1">
                             <button
-                                onclick={() => { settings.amber = clamp(settings.amber - 5, settings.red + 1, 9); }}
+                                onclick={() => { settings.amber = clamp(settings.amber - 5, settings.green + 1, settings.blue - 1); settings.save(); }}
                                 class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
                             >−</button>
-                            <span class="text-sm font-mono w-14 text-center tabular-nums">
-                                ≤ {settings.amber}¢
+                            <span class="text-sm font-mono w-24 text-center tabular-nums">
+                                ≤ {formatEuroPrice(settings.amber)}
                             </span>
                             <button
-                                onclick={() => { settings.amber = clamp(settings.amber + 5, settings.red + 1, 9); }}
+                                onclick={() => { settings.amber = clamp(settings.amber + 5, settings.green + 1, settings.blue - 1); settings.save(); }}
                                 class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
                             >+</button>
                         </div>
                     </div>
-                    <p class="text-xs text-muted-foreground">
-                        Prijs waarbij u minder betaalt dan normaal (onder deze grens melding sturen).
-                    </p>
+                    <p class="text-xs text-muted-foreground">Prijs is negatief maar nog niet genoeg om geld te verdienen.</p>
+                </div>
+
+                <div class="border-t"></div>
+
+                <!-- Blue threshold -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-sm font-medium text-foreground flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                            Oranje — goedkoop
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button
+                                onclick={() => { settings.blue = clamp(settings.blue - 5, settings.amber + 1, 200); settings.save(); }}
+                                class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
+                            >−</button>
+                            <span class="text-sm font-mono w-24 text-center tabular-nums">
+                                ≤ {formatEuroPrice(settings.blue)}
+                            </span>
+                            <button
+                                onclick={() => { settings.blue = clamp(settings.blue + 5, settings.amber + 1, 200); settings.save(); }}
+                                class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
+                            >+</button>
+                        </div>
+                    </div>
+                    <p class="text-xs text-muted-foreground">Prijs is positief maar nog goedkoop genoeg om voordelig te zijn.</p>
                 </div>
 
                 <div class="border-t"></div>
 
                 <!-- Info row -->
                 <div class="rounded-xl bg-muted p-3 text-xs text-muted-foreground space-y-1">
-                    <p>🟢 <strong>Groen</strong>: prijs tussen oranje drempel en 10¢/kWh (geen melding)</p>
-                    <p>⬜ <strong>Normaal</strong>: prijs boven 10¢/kWh (geen melding)</p>
+                    <p>🔴 <strong>Rood</strong>: prijs boven de oranje (goedkoop) drempel — duur, melding verzonden.</p>
                 </div>
             </div>
         </section>
@@ -216,7 +286,7 @@
 
         <!-- Info -->
         <p class="text-xs text-center text-muted-foreground">
-            Prijsbron: EPEX Spot Belgium (Belpex). Prijzen in ¢/kWh (eurocent per kilowattuur), exclusief vaste kosten.
+            Prijsbron: EPEX Spot Belgium (Belpex). Prijzen in €/kWh (euro per kilowattuur), exclusief vaste kosten.
         </p>
 
     </div>

@@ -13,17 +13,17 @@
     let chart: import('chart.js').Chart | null = null;
 
     const COLORS: Record<string, string> = {
-        red: 'rgba(239, 68, 68, 0.85)',
-        amber: 'rgba(245, 158, 11, 0.85)',
         green: 'rgba(34, 197, 94, 0.85)',
-        normal: 'rgba(148, 163, 184, 0.75)'
+        blue: 'rgba(59, 130, 246, 0.85)',
+        amber: 'rgba(245, 158, 11, 0.85)',
+        red: 'rgba(239, 68, 68, 0.85)'
     };
 
     const COLORS_CURRENT: Record<string, string> = {
-        red: 'rgba(239, 68, 68, 1)',
-        amber: 'rgba(245, 158, 11, 1)',
         green: 'rgba(34, 197, 94, 1)',
-        normal: 'rgba(100, 116, 139, 0.9)'
+        blue: 'rgba(59, 130, 246, 1)',
+        amber: 'rgba(245, 158, 11, 1)',
+        red: 'rgba(239, 68, 68, 1)'
     };
 
     function buildDataset(prices: HourlyPrice[]) {
@@ -91,7 +91,7 @@
                             lineWidth: (ctx) => (ctx.tick.value === 0 ? 2 : 1)
                         },
                         ticks: {
-                            callback: (v) => `${v}¢`,
+                            callback: (v) => `€${(Number(v) / 100).toFixed(4).replace('.', ',')}`,
                             font: { size: 11 },
                             color: '#94a3b8'
                         }
@@ -112,7 +112,7 @@
                                 const h = items[0].dataIndex;
                                 return `${String(h).padStart(2, '0')}:00–${String(h + 1).padStart(2, '0')}:00`;
                             },
-                            label: (item) => ` ${Number(item.raw).toFixed(2)} ¢/kWh`
+                            label: (item) => ` €${(Number(item.raw) / 100).toFixed(4).replace('.', ',')}/kWh`
                         }
                     }
                 }

@@ -1,4 +1,4 @@
-export type AlertLevel = 'red' | 'amber' | 'green' | 'normal';
+export type AlertLevel = 'green' | 'blue' | 'amber' | 'red';
 
 export interface HourlyPrice {
     hour: number; // 0–23 local Belgian hour
@@ -9,8 +9,10 @@ export interface HourlyPrice {
 }
 
 export interface Thresholds {
-    red: number; // default -20 c/kWh
-    amber: number; // default 0 c/kWh
+    green: number; // ≤ this → making money (green), default -20¢/kWh
+    amber: number; // ≤ this → below zero (blue),    default 0¢/kWh
+    blue: number;  // ≤ this → cheap (amber),         default 10¢/kWh
+    // above blue → expensive (red)
 }
 
 export interface PricesResponse {

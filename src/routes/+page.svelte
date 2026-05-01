@@ -9,7 +9,6 @@
         getTodayBelgian,
         getTomorrowBelgian,
         getCurrentBelgianHour,
-        isTomorrowAvailable,
         formatBelgianDate
     } from '$lib/priceUtils.js';
 
@@ -21,9 +20,7 @@
 
     const isToday = $derived(data.date === today);
     const isTomorrow = $derived(data.date === tomorrow);
-    const canGoForward = $derived(
-        data.date < today || (isToday && isTomorrowAvailable())
-    );
+    const canGoForward = true;
     const canGoBack = $derived(data.date > '2022-01-01'); // ENTSO-E has ~2 years history
 
     const dateLabel = $derived(
@@ -42,7 +39,8 @@
         const [y, m, d] = data.date.split('-').map(Number);
         const next = new Date(y, m - 1, d);
         next.setDate(next.getDate() + dir);
-        const newDate = next.toISOString().slice(0, 10);
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const newDate = `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
         goto(`?date=${newDate}`, { replaceState: false });
     }
 
@@ -79,7 +77,7 @@
 
         <!-- Current price card (today only) -->
         {#if currentPrice}
-            <CurrentPriceCard price={currentPrice} />
+            <CurrentPriceCard price={currentPrice} thresholds={settings.thresholds} />
         {/if}
 
         <!-- Date navigation + chart card -->
@@ -126,7 +124,7 @@
             <div class="p-4">
                 {#if data.error}
                     <div class="flex items-center justify-center h-48 text-muted-foreground text-sm">
-                        Kon prijzen niet laden. Probeer later opnieuw.
+                        {data.date > today ? 'Geen prijzen beschikbaar voor deze datum.' : 'Kon prijzen niet laden. Probeer later opnieuw.'}
                     </div>
                 {:else if data.prices.length === 0}
                     <div class="flex items-center justify-center h-48">
@@ -144,18 +142,11 @@
 
         <!-- Legend -->
         <div class="flex flex-wrap gap-2">
-            <AlertBadge level="red" label="Verdien geld (≤ −20¢)" />
-            <AlertBadge level="amber" label="Onder nul" />
-            <AlertBadge level="green" label="Goedkoop (≤ 10¢)" />
-            <AlertBadge level="normal" label="Normaal" />
+            <AlertBadge level="green" label="Verdien geld (< €−0,2000)" />
+            <AlertBadge level="blue" label="Onder nul" />
+            <AlertBadge level="amber" label="Goedkoop (≤ €0,1500)" />
+            <AlertBadge level="red" label="Duur (> €0,1500)" />
         </div>
-
-        <!-- Tomorrow hint (before 14:00) -->
-        {#if isToday && !isTomorrowAvailable()}
-            <p class="text-xs text-muted-foreground text-center">
-                Prijzen van morgen beschikbaar na 14:00 u.
-            </p>
-        {/if}
 
     </div>
 </div>

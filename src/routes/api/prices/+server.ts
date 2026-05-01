@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { fetchFromApx, fetchFromEntsoe } from '$lib/apiParser.js';
+import { fetchFromEneco, fetchFromApx, fetchFromEntsoe } from '$lib/apiParser.js';
 import { getTodayBelgian } from '$lib/priceUtils.js';
 import { DEFAULT_THRESHOLDS } from '$lib/priceUtils.js';
 import { env } from '$env/dynamic/private';
@@ -15,7 +15,22 @@ export const GET: RequestHandler = async ({ url }) => {
 
     const thresholds = DEFAULT_THRESHOLDS;
 
-    // 1. Try APX Group REST API (used by Eneco BE, no auth required)
+    // 1. Try Eneco BE Dynamic Pricing API (primary source)
+    try {
+        const prices = await fetchFromEneco(date, thresholds);
+        return json(
+            { date, prices },
+            {
+                headers: {
+                    'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=600'
+                }
+            }
+        );
+    } catch (enecoErr) {
+        console.warn('Eneco fetch failed, trying APX:', enecoErr);
+    }
+
+    // 2. Try APX Group REST API (fallback)
     try {
         const prices = await fetchFromApx(date, thresholds);
         return json(
@@ -30,7 +45,7 @@ export const GET: RequestHandler = async ({ url }) => {
         console.warn('APX fetch failed, trying ENTSO-E:', apxErr);
     }
 
-    // 2. Fallback: ENTSO-E Transparency Platform (requires API key)
+    // 3. Fallback: ENTSO-E Transparency Platform (requires API key)
     const entsoeKey = env.ENTSOE_API_KEY;
     if (entsoeKey) {
         try {
@@ -50,6 +65,6 @@ export const GET: RequestHandler = async ({ url }) => {
 
     throw error(
         502,
-        'Could not fetch electricity prices. Check APX API availability or configure ENTSOE_API_KEY.'
+        'Could not fetch electricity prices. All sources failed (Eneco, APX, ENTSO-E).'
     );
 };

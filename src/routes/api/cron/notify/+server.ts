@@ -49,8 +49,8 @@ export const GET: RequestHandler = async () => {
         return json({ notified: 0, skipped: 0, reason: 'no price for current hour' });
     }
 
-    // Only notify for red and amber
-    if (currentPrice.alertLevel !== 'red' && currentPrice.alertLevel !== 'amber') {
+    // Only notify for making money (green), below zero (blue), and expensive (red)
+    if (currentPrice.alertLevel !== 'green' && currentPrice.alertLevel !== 'blue' && currentPrice.alertLevel !== 'red') {
         return json({ notified: 0, skipped: 0, reason: `alert level ${currentPrice.alertLevel}` });
     }
 
@@ -64,7 +64,7 @@ export const GET: RequestHandler = async () => {
 
             // Re-compute alert level with subscription's own thresholds
             const alertLevel = getAlertLevel(currentPrice.centPerKwh, stored.thresholds);
-            if (alertLevel !== 'red' && alertLevel !== 'amber') {
+            if (alertLevel !== 'green' && alertLevel !== 'blue' && alertLevel !== 'red') {
                 skipped++;
                 return;
             }
