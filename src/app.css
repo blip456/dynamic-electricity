@@ -1,0 +1,68 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+:root {
+    --background: hsl(0 0% 100%);
+    --foreground: hsl(240 10% 3.9%);
+    --muted: hsl(240 4.8% 95.9%);
+    --muted-foreground: hsl(240 3.8% 46.1%);
+    --card: hsl(0 0% 100%);
+    --card-foreground: hsl(240 10% 3.9%);
+    --border: hsl(240 5.9% 90%);
+    --input: hsl(240 5.9% 90%);
+    --primary: hsl(240 5.9% 10%);
+    --primary-foreground: hsl(0 0% 98%);
+    --secondary: hsl(240 4.8% 95.9%);
+    --secondary-foreground: hsl(240 5.9% 10%);
+    --accent: hsl(240 4.8% 95.9%);
+    --accent-foreground: hsl(240 5.9% 10%);
+    --destructive: hsl(0 72.2% 50.6%);
+    --ring: hsl(240 10% 3.9%);
+    --radius: 0.75rem;
+
+    /* Alert colours */
+    --alert-red: hsl(0 84% 60%);
+    --alert-amber: hsl(38 92% 50%);
+    --alert-green: hsl(142 71% 45%);
+    --alert-normal: hsl(215 16% 47%);
+}
+
+@theme inline {
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-ring: var(--ring);
+
+    --color-alert-red: var(--alert-red);
+    --color-alert-amber: var(--alert-amber);
+    --color-alert-green: var(--alert-green);
+    --color-alert-normal: var(--alert-normal);
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+
+    body {
+        @apply bg-background text-foreground;
+        -webkit-tap-highlight-color: transparent;
+    }
+}
