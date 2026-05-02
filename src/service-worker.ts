@@ -52,8 +52,8 @@ self.addEventListener('push', (event) => {
 
     const options: NotificationOptions = {
         body: data.body,
-        icon: '/icons/icon.svg',
-        badge: '/icons/icon.svg',
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
         tag: `price-alert-${data.hour}`,
         renotify: data.alertLevel === 'green' || data.alertLevel === 'red',
         data: { url: data.url ?? '/' }
