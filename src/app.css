@@ -59,6 +59,9 @@
 @layer base {
     * {
         @apply border-border;
+        /* prevent text selection when dragging on charts / touch UIs */
+        -webkit-user-select: none;
+        user-select: none;
     }
 
     body {

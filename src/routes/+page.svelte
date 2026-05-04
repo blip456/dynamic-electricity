@@ -1,6 +1,7 @@
 <script lang="ts">
+    import { onMount, onDestroy } from 'svelte';
     import { goto } from '$app/navigation';
-    import { Settings, Maximize2, X } from '@lucide/svelte';
+    import { Settings, Maximize2, X, RotateCcw } from '@lucide/svelte';
     import PriceChart from '$lib/components/PriceChart.svelte';
     import CurrentPriceCard from '$lib/components/CurrentPriceCard.svelte';
     import AlertBadge from '$lib/components/AlertBadge.svelte';
@@ -33,6 +34,42 @@
     );
 
     let fullscreen = $state(false);
+    // true once the device is in landscape (or lock succeeded)
+    let isLandscape = $state(false);
+    // false when screen.orientation.lock threw (iOS) → show rotate hint
+    let orientationLockSupported = $state(true);
+
+    function updateOrientation() {
+        isLandscape = window.innerWidth > window.innerHeight;
+    }
+
+    async function openFullscreen() {
+        fullscreen = true;
+        updateOrientation();
+        try {
+            // Works on Chrome/Android PWA; throws NotSupportedError on iOS Safari
+            await (screen.orientation as unknown as { lock(o: string): Promise<void> }).lock('landscape');
+        } catch {
+            orientationLockSupported = false;
+        }
+    }
+
+    function closeFullscreen() {
+        fullscreen = false;
+        orientationLockSupported = true; // reset for next open
+        try {
+            screen.orientation.unlock();
+        } catch { /* ignore on unsupported browsers */ }
+    }
+
+    onMount(() => {
+        updateOrientation();
+        window.addEventListener('resize', updateOrientation);
+    });
+
+    onDestroy(() => {
+        window.removeEventListener('resize', updateOrientation);
+    });
 
     function navigate(dir: -1 | 1) {
         const [y, m, d] = data.date.split('-').map(Number);
@@ -51,7 +88,7 @@
 
 <!-- ─── Fullscreen overlay ───────────────────────────────────────────────── -->
 {#if fullscreen}
-    <div class="fixed inset-0 z-50 bg-background flex flex-col">
+    <div class="fixed inset-0 z-50 bg-background flex flex-col" role="dialog" aria-modal="true">
 
         <!-- Fullscreen header -->
         <div class="flex items-center justify-between px-4 py-3 border-b flex-shrink-0">
@@ -86,7 +123,7 @@
             </div>
 
             <button
-                onclick={() => (fullscreen = false)}
+                onclick={closeFullscreen}
                 class="p-2 rounded-xl hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
                 aria-label="Sluiten"
             >
@@ -95,7 +132,7 @@
         </div>
 
         <!-- Fullscreen chart -->
-        <div class="flex-1 min-h-0 px-4 pb-4 pt-2">
+        <div class="flex-1 min-h-0 px-4 pb-4 pt-2 relative">
             {#if data.error}
                 <div class="flex items-center justify-center h-full text-muted-foreground text-sm">
                     {data.date > today ? 'Geen prijzen beschikbaar voor deze datum.' : 'Kon prijzen niet laden.'}
@@ -111,6 +148,16 @@
                     currentHour={isToday ? currentHour : -1}
                     containerClass="h-full"
                 />
+            {/if}
+
+            <!-- Rotate hint: shown on iOS (lock unsupported) while still portrait -->
+            {#if !orientationLockSupported && !isLandscape}
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div class="flex items-center gap-2 bg-foreground/80 text-background rounded-2xl px-4 py-3 text-sm backdrop-blur-sm">
+                        <RotateCcw size={16} class="animate-spin" style="animation-duration:2s" />
+                        <span>Draai je telefoon voor volledig scherm</span>
+                    </div>
+                </div>
             {/if}
         </div>
     </div>
@@ -183,7 +230,7 @@
                         </svg>
                     </button>
                     <button
-                        onclick={() => (fullscreen = true)}
+                        onclick={openFullscreen}
                         class="p-2 rounded-xl hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
                         aria-label="Volledig scherm"
                     >
