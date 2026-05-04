@@ -22,6 +22,7 @@
     const isToday    = $derived(data.date === today);
     const isTomorrow = $derived(data.date === tomorrow);
     const canGoBack  = $derived(data.date > '2022-01-01');
+    const canGoForward = true;
 
     const dateLabel = $derived(
         isToday    ? `Vandaag, ${formatBelgianDate(data.date)}`  :
@@ -216,28 +217,29 @@
                     <span class="text-sm font-medium text-foreground">{dateLabel}</span>
                 </div>
 
-                <div class="flex items-center gap-1">
                     <button
                         onclick={() => navigate(1)}
-                        class="p-2 rounded-xl hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                        disabled={!canGoForward}
+                        class="p-2 rounded-xl hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-muted-foreground hover:text-foreground"
                         aria-label="Volgende dag"
                     >
                         <svg viewBox="0 0 24 24" class="w-4 h-4 stroke-current fill-none" stroke-width="2">
                             <polyline points="9 18 15 12 9 6" />
                         </svg>
                     </button>
-                    <button
-                        onclick={openFullscreen}
-                        class="p-2 rounded-xl hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
-                        aria-label="Volledig scherm"
-                    >
-                        <Maximize2 size={16} />
-                    </button>
-                </div>
             </div>
 
             <!-- Chart -->
-            <div class="px-4 pt-4 pb-2">
+            <div class="px-4 pt-4 pb-2 relative">
+                <!-- Fullscreen button overlaid top-right of chart -->
+                <button
+                    onclick={openFullscreen}
+                    class="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-background/80 backdrop-blur-sm border shadow-sm hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                    aria-label="Volledig scherm"
+                >
+                    <Maximize2 size={14} />
+                </button>
+
                 {#if data.error}
                     <div class="flex items-center justify-center h-48 text-muted-foreground text-sm">
                         {data.date > today ? 'Geen prijzen beschikbaar voor deze datum.' : 'Kon prijzen niet laden. Probeer later opnieuw.'}
