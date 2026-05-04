@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount, onDestroy } from 'svelte';
+    import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
     import { Settings, Maximize2, X, RotateCcw } from '@lucide/svelte';
     import PriceChart from '$lib/components/PriceChart.svelte';
@@ -65,10 +65,7 @@
     onMount(() => {
         updateOrientation();
         window.addEventListener('resize', updateOrientation);
-    });
-
-    onDestroy(() => {
-        window.removeEventListener('resize', updateOrientation);
+        return () => window.removeEventListener('resize', updateOrientation);
     });
 
     function navigate(dir: -1 | 1) {

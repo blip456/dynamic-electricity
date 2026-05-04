@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import webpush from 'web-push';
 import { env } from '$env/dynamic/private';
-import { fetchFromApx, fetchFromEntsoe } from '$lib/apiParser.js';
+import { fetchFromEnergyCharts, fetchFromEntsoe } from '$lib/apiParser.js';
 import {
     getCurrentBelgianHour,
     getTodayBelgian,
@@ -30,15 +30,12 @@ export const GET: RequestHandler = async () => {
     const currentHour = getCurrentBelgianHour();
     const hourKey = `${today}:${currentHour}`;
 
-    // Fetch today's prices
     let prices;
     try {
-        const result = await fetchFromApx(today);
-        prices = result;
+        prices = await fetchFromEnergyCharts(today);
     } catch {
         if (env.ENTSOE_API_KEY) {
-            const result = await fetchFromEntsoe(today, env.ENTSOE_API_KEY);
-            prices = result;
+            prices = await fetchFromEntsoe(today, env.ENTSOE_API_KEY);
         } else {
             throw error(502, 'Could not fetch prices');
         }
@@ -49,7 +46,6 @@ export const GET: RequestHandler = async () => {
         return json({ notified: 0, skipped: 0, reason: 'no price for current hour' });
     }
 
-    // Only notify for making money (green), below zero (blue), and expensive (red)
     if (currentPrice.alertLevel !== 'green' && currentPrice.alertLevel !== 'blue' && currentPrice.alertLevel !== 'red') {
         return json({ notified: 0, skipped: 0, reason: `alert level ${currentPrice.alertLevel}` });
     }
@@ -61,15 +57,12 @@ export const GET: RequestHandler = async () => {
     await Promise.all(
         subscriptions.map(async (stored) => {
             const subHourKey = `${stored.id}:${hourKey}`;
-
-            // Re-compute alert level with subscription's own thresholds
             const alertLevel = getAlertLevel(currentPrice.centPerKwh, stored.thresholds);
             if (alertLevel !== 'green' && alertLevel !== 'blue' && alertLevel !== 'red') {
                 skipped++;
                 return;
             }
 
-            // Deduplicate: don't send more than once per hour per subscription
             if (await hasNotifiedThisHour(stored.id, hourKey)) {
                 skipped++;
                 return;
