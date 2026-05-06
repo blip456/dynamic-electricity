@@ -18,10 +18,14 @@
     let canvas: HTMLCanvasElement;
     let chart: import('chart.js').Chart | null = null;
 
-    // hoveredBar: follows finger/mouse during motion, clears when lifted
-    // pinnedBar:  set by a tap, persists until tapped again (toggle)
-    let hoveredBar = -1;
-    let pinnedBar  = -1;
+    // hoveredBar: follows finger/mouse; clears on lift
+    // pinnedBar:  persists after a tap; tap same bar to clear
+    // touchBarCount: how many distinct bars visited in this touch sequence
+    //   0 = touched outside chart, 1 = pure tap, >1 = slide
+    let hoveredBar    = -1;
+    let pinnedBar     = -1;
+    let touchBarCount = 0;
+    let firstTouchBar = -1;
     let selectedPrice = $state<HourlyPrice | null>(null);
 
     const COLORS: Record<string, string> = {
@@ -94,31 +98,6 @@
         selectedPrice = active >= 0 ? sorted()[active] : null;
     }
 
-    // Find the bar index closest to a given canvas x-coordinate.
-    // Returns -1 if the x is outside the chart plot area.
-    function barAtX(clientX: number): number {
-        if (!chart) return -1;
-        const rect = canvas.getBoundingClientRect();
-        const x    = clientX - rect.left;
-        const ca   = chart.chartArea;
-        if (x < ca.left || x > ca.right) return -1;
-
-        const meta = chart.getDatasetMeta(0);
-        let best = -1, bestDist = Infinity;
-        for (let i = 0; i < meta.data.length; i++) {
-            const d = Math.abs((meta.data[i] as { x: number }).x - x);
-            if (d < bestDist) { bestDist = d; best = i; }
-        }
-        return best;
-    }
-
-    function handleTap(clientX: number) {
-        const idx = barAtX(clientX);
-        pinnedBar = idx === pinnedBar ? -1 : idx;
-        syncPrice();
-        updateChart();
-    }
-
     async function createChart() {
         const { Chart, BarController, BarElement, CategoryScale, LinearScale } =
             await import('chart.js');
@@ -143,10 +122,20 @@
                 responsive:          true,
                 maintainAspectRatio: false,
                 animation:           { duration: 300 },
-                // intersect:false lets hover fire even between bars → smooth slide
                 interaction: { mode: 'index', intersect: false },
                 onHover: (_, elements) => {
                     const idx = elements.length > 0 ? elements[0].index : -1;
+
+                    // Count distinct bars visited: 1 = tap, >1 = slide
+                    if (idx >= 0) {
+                        if (touchBarCount === 0) {
+                            firstTouchBar = idx;
+                            touchBarCount = 1;
+                        } else if (idx !== hoveredBar) {
+                            touchBarCount++;
+                        }
+                    }
+
                     if (idx !== hoveredBar) {
                         hoveredBar = idx;
                         syncPrice();
@@ -187,42 +176,45 @@
     onMount(() => {
         createChart();
 
-        // Chart.js onClick is unreliable on iOS Safari (touch-synthesised click
-        // fires with empty elements). Use native touch/click events instead.
-        let touchStartX = 0;
-        let isDrag      = false;
+        // touchBarCount === 1 means the finger landed on exactly one bar → tap.
+        // touchBarCount > 1 means it slid across multiple bars → slide, don't pin.
+        // This avoids any pixel math and relies purely on Chart.js's own hit detection.
+        function onTouchStart() {
+            touchBarCount = 0;
+            firstTouchBar = -1;
+        }
 
-        function onTouchStart(e: TouchEvent) {
-            touchStartX = e.touches[0].clientX;
-            isDrag      = false;
+        function onTouchEnd() {
+            if (touchBarCount === 1) {
+                pinnedBar = firstTouchBar === pinnedBar ? -1 : firstTouchBar;
+                syncPrice();
+                updateChart();
+            }
         }
-        function onTouchMove(e: TouchEvent) {
-            if (Math.abs(e.touches[0].clientX - touchStartX) > 8) isDrag = true;
-        }
-        function onTouchEnd(e: TouchEvent) {
-            if (!isDrag) handleTap(e.changedTouches[0].clientX);
-        }
-        // Desktop mouse click (not preceded by touch)
-        let lastTouchEnd = 0;
-        function onTouchEndTime() { lastTouchEnd = Date.now(); }
+
+        // Desktop mouse click: hoveredBar is already set by onHover (mousemove).
+        // Guard against the ghost click iOS fires ~300ms after touchend.
+        let lastTouchEndMs = 0;
+        function onTouchEndTime() { lastTouchEndMs = Date.now(); }
+
         function onClick(e: MouseEvent) {
-            // Ignore the ghost click browsers fire ~300ms after touchend
-            if (Date.now() - lastTouchEnd < 500) return;
-            handleTap(e.clientX);
+            if (Date.now() - lastTouchEndMs < 500) return;
+            if (hoveredBar < 0) return;
+            pinnedBar = hoveredBar === pinnedBar ? -1 : hoveredBar;
+            syncPrice();
+            updateChart();
         }
 
-        canvas.addEventListener('touchstart',  onTouchStart,   { passive: true });
-        canvas.addEventListener('touchmove',   onTouchMove,    { passive: true });
-        canvas.addEventListener('touchend',    onTouchEnd,     { passive: true });
-        canvas.addEventListener('touchend',    onTouchEndTime, { passive: true });
-        canvas.addEventListener('click',       onClick);
+        canvas.addEventListener('touchstart', onTouchStart,   { passive: true });
+        canvas.addEventListener('touchend',   onTouchEnd,     { passive: true });
+        canvas.addEventListener('touchend',   onTouchEndTime, { passive: true });
+        canvas.addEventListener('click',      onClick);
 
         return () => {
-            canvas.removeEventListener('touchstart',  onTouchStart);
-            canvas.removeEventListener('touchmove',   onTouchMove);
-            canvas.removeEventListener('touchend',    onTouchEnd);
-            canvas.removeEventListener('touchend',    onTouchEndTime);
-            canvas.removeEventListener('click',       onClick);
+            canvas.removeEventListener('touchstart', onTouchStart);
+            canvas.removeEventListener('touchend',   onTouchEnd);
+            canvas.removeEventListener('touchend',   onTouchEndTime);
+            canvas.removeEventListener('click',      onClick);
             chart?.destroy();
         };
     });
