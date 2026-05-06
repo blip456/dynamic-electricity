@@ -19,25 +19,37 @@
     const tomorrow    = getTomorrowBelgian();
     const currentHour = getCurrentBelgianHour();
 
-    const isToday    = $derived(data.date === today);
-    const isTomorrow = $derived(data.date === tomorrow);
-    const canGoBack  = $derived(data.date > '2022-01-01');
+    // Optimistic navigation: localDate updates immediately on click;
+    // isNavigating shows a spinner until SvelteKit delivers new data.
+    let localDate    = $state(data.date);
+    let isNavigating = $state(false);
+
+    $effect(() => {
+        // Runs whenever data.date changes (new load completed or browser back/fwd)
+        localDate    = data.date;
+        isNavigating = false;
+    });
+
+    const isToday      = $derived(localDate === today);
+    const isTomorrow   = $derived(localDate === tomorrow);
+    const canGoBack    = $derived(localDate > '2022-01-01');
     const canGoForward = true;
 
     const dateLabel = $derived(
-        isToday    ? `Vandaag, ${formatBelgianDate(data.date)}`  :
-        isTomorrow ? `Morgen, ${formatBelgianDate(data.date)}`   :
-                     formatBelgianDate(data.date)
+        isToday    ? `Vandaag, ${formatBelgianDate(localDate)}`  :
+        isTomorrow ? `Morgen, ${formatBelgianDate(localDate)}`   :
+                     formatBelgianDate(localDate)
     );
 
+    // Only show the live price card when we're on today AND the fresh data is loaded
     const currentPrice = $derived(
-        isToday ? data.prices.find((p) => p.hour === currentHour) ?? null : null
+        isToday && !isNavigating
+            ? (data.prices.find((p) => p.hour === currentHour) ?? null)
+            : null
     );
 
     let fullscreen = $state(false);
-    // true once the device is in landscape (or lock succeeded)
     let isLandscape = $state(false);
-    // false when screen.orientation.lock threw (iOS) → show rotate hint
     let orientationLockSupported = $state(true);
 
     function updateOrientation() {
@@ -48,7 +60,6 @@
         fullscreen = true;
         updateOrientation();
         try {
-            // Works on Chrome/Android PWA; throws NotSupportedError on iOS Safari
             await (screen.orientation as unknown as { lock(o: string): Promise<void> }).lock('landscape');
         } catch {
             orientationLockSupported = false;
@@ -57,7 +68,7 @@
 
     function closeFullscreen() {
         fullscreen = false;
-        orientationLockSupported = true; // reset for next open
+        orientationLockSupported = true;
         try {
             screen.orientation.unlock();
         } catch { /* ignore on unsupported browsers */ }
@@ -70,14 +81,21 @@
     });
 
     function navigate(dir: -1 | 1) {
-        const [y, m, d] = data.date.split('-').map(Number);
+        const [y, m, d] = localDate.split('-').map(Number);
         const next = new Date(y, m - 1, d);
         next.setDate(next.getDate() + dir);
         const pad = (n: number) => String(n).padStart(2, '0');
-        goto(`?date=${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`, { replaceState: false });
+        const newDate = `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
+        localDate    = newDate;
+        isNavigating = true;
+        goto(`?date=${newDate}`, { replaceState: false, noScroll: true });
     }
 
-    function goToday() { goto('/', { replaceState: false }); }
+    function goToday() {
+        localDate    = today;
+        isNavigating = true;
+        goto('/', { replaceState: false, noScroll: true });
+    }
 </script>
 
 <svelte:head>
@@ -131,7 +149,11 @@
 
         <!-- Fullscreen chart -->
         <div class="flex-1 min-h-0 px-4 pb-4 pt-2 relative">
-            {#if data.error}
+            {#if isNavigating}
+                <div class="flex items-center justify-center h-full">
+                    <div class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                </div>
+            {:else if data.error}
                 <div class="flex items-center justify-center h-full text-muted-foreground text-sm">
                     {data.date > today ? 'Geen prijzen beschikbaar voor deze datum.' : 'Kon prijzen niet laden.'}
                 </div>
@@ -184,7 +206,7 @@
             </a>
         </div>
 
-        <!-- Current price card (today only) -->
+        <!-- Current price card (today only, not while navigating) -->
         {#if currentPrice}
             <CurrentPriceCard price={currentPrice} thresholds={settings.thresholds} />
         {/if}
@@ -240,7 +262,11 @@
                     <Maximize2 size={14} />
                 </button>
 
-                {#if data.error}
+                {#if isNavigating}
+                    <div class="flex items-center justify-center h-48">
+                        <div class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                {:else if data.error}
                     <div class="flex items-center justify-center h-48 text-muted-foreground text-sm">
                         {data.date > today ? 'Geen prijzen beschikbaar voor deze datum.' : 'Kon prijzen niet laden. Probeer later opnieuw.'}
                     </div>

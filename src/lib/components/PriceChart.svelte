@@ -18,8 +18,10 @@
     let canvas: HTMLCanvasElement;
     let chart: import('chart.js').Chart | null = null;
 
-    // -1 means nothing selected; >= 0 is the touched/hovered bar index
-    let selectedBar = -1;
+    // hoveredBar: follows finger/mouse during motion, clears when lifted
+    // pinnedBar:  set by a tap, persists until tapped again (toggle)
+    let hoveredBar = -1;
+    let pinnedBar  = -1;
     let selectedPrice = $state<HourlyPrice | null>(null);
 
     const COLORS: Record<string, string> = {
@@ -29,7 +31,6 @@
         red:   'rgba(239, 68, 68, 0.80)'
     };
 
-    // All other bars fade to this when one is selected
     const COLORS_DIM: Record<string, string> = {
         green: 'rgba(34, 197, 94, 0.18)',
         blue:  'rgba(59, 130, 246, 0.18)',
@@ -37,7 +38,6 @@
         red:   'rgba(239, 68, 68, 0.18)'
     };
 
-    // The selected / current bar is fully saturated
     const COLORS_FULL: Record<string, string> = {
         green: 'rgba(34, 197, 94, 1)',
         blue:  'rgba(59, 130, 246, 1)',
@@ -50,26 +50,27 @@
     }
 
     function buildDataset() {
-        const rows = sorted();
+        const rows   = sorted();
         const data   = rows.map((p) => p.centPerKwh);
         const labels = rows.map((p) => `${String(p.hour).padStart(2, '0')}:00`);
 
-        const hasSelection = selectedBar >= 0;
+        const active       = hoveredBar >= 0 ? hoveredBar : pinnedBar;
+        const hasSelection = active >= 0;
 
         const bgColors = rows.map((p, i) => {
             const level = getAlertLevel(p.centPerKwh, thresholds);
-            if (hasSelection) return i === selectedBar ? COLORS_FULL[level] : COLORS_DIM[level];
+            if (hasSelection) return i === active ? COLORS_FULL[level] : COLORS_DIM[level];
             return i === currentHour ? COLORS_FULL[level] : COLORS[level];
         });
 
         const borderColors = rows.map((_, i) => {
-            if (hasSelection && i === selectedBar) return 'rgba(255,255,255,0.85)';
+            if (hasSelection && i === active) return 'rgba(255,255,255,0.85)';
             if (!hasSelection && i === currentHour) return 'rgba(59,130,246,1)';
             return 'transparent';
         });
 
         const borderWidths = rows.map((_, i) => {
-            if (hasSelection && i === selectedBar) return 2.5;
+            if (hasSelection && i === active) return 2.5;
             if (!hasSelection && i === currentHour) return 2;
             return 0;
         });
@@ -81,19 +82,16 @@
         if (!chart) return;
         const { data, labels, bgColors, borderColors, borderWidths } = buildDataset();
         chart.data.labels = labels;
-        chart.data.datasets[0].data         = data;
+        chart.data.datasets[0].data            = data;
         chart.data.datasets[0].backgroundColor = bgColors;
-        chart.data.datasets[0].borderColor   = borderColors;
-        chart.data.datasets[0].borderWidth   = borderWidths;
+        chart.data.datasets[0].borderColor     = borderColors;
+        chart.data.datasets[0].borderWidth     = borderWidths;
         chart.update('none');
     }
 
-    function select(idx: number) {
-        if (idx === selectedBar) return;
-        selectedBar   = idx;
-        const rows    = sorted();
-        selectedPrice = idx >= 0 ? rows[idx] : null;
-        updateChart();
+    function syncPrice() {
+        const active  = hoveredBar >= 0 ? hoveredBar : pinnedBar;
+        selectedPrice = active >= 0 ? sorted()[active] : null;
     }
 
     async function createChart() {
@@ -120,25 +118,31 @@
                 responsive:          true,
                 maintainAspectRatio: false,
                 animation:           { duration: 300 },
-                // intersect:false fires hover even between bars → smooth slide
+                // intersect:false lets hover fire even between bars → smooth slide
                 interaction: { mode: 'index', intersect: false },
                 onHover: (_, elements) => {
-                    select(elements.length > 0 ? elements[0].index : -1);
+                    const idx = elements.length > 0 ? elements[0].index : -1;
+                    if (idx !== hoveredBar) {
+                        hoveredBar = idx;
+                        syncPrice();
+                        updateChart();
+                    }
                 },
                 onClick: (_, elements) => {
-                    // tap same bar deselects
                     const idx = elements.length > 0 ? elements[0].index : -1;
-                    select(idx === selectedBar ? -1 : idx);
+                    pinnedBar = idx === pinnedBar ? -1 : idx;
+                    syncPrice();
+                    updateChart();
                 },
                 scales: {
                     x: {
                         grid: { display: false },
                         ticks: {
-                            maxRotation: 0,
-                            autoSkip:    true,
+                            maxRotation:   0,
+                            autoSkip:      true,
                             maxTicksLimit: 8,
-                            font:  { size: 11 },
-                            color: '#94a3b8'
+                            font:          { size: 11 },
+                            color:         '#94a3b8'
                         }
                     },
                     y: {
@@ -148,14 +152,14 @@
                         },
                         ticks: {
                             callback: (v) => `€${(Number(v) / 100).toFixed(4).replace('.', ',')}`,
-                            font:  { size: 11 },
-                            color: '#94a3b8'
+                            font:     { size: 11 },
+                            color:    '#94a3b8'
                         }
                     }
                 },
                 plugins: {
                     legend:  { display: false },
-                    tooltip: { enabled: false }   // replaced by the info strip below
+                    tooltip: { enabled: false }
                 }
             }
         });
@@ -167,14 +171,14 @@
     $effect(() => {
         prices; thresholds; currentHour;
         if (chart) {
-            selectedBar   = -1;
+            hoveredBar    = -1;
+            pinnedBar     = -1;
             selectedPrice = null;
             updateChart();
         }
     });
 </script>
 
-<!-- Canvas fills the top portion, info strip sits at the bottom -->
 <div class="flex flex-col {containerClass} w-full">
     <div class="flex-1 min-h-0">
         <canvas bind:this={canvas}></canvas>
