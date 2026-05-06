@@ -1,152 +1,200 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
     import type { HourlyPrice, Thresholds } from '$lib/types.js';
-    import { getAlertLevel } from '$lib/priceUtils.js';
+    import { getAlertLevel, formatEuroPrice } from '$lib/priceUtils.js';
 
     let {
         prices,
         thresholds,
-        currentHour = -1
-    }: { prices: HourlyPrice[]; thresholds: Thresholds; currentHour?: number } = $props();
+        currentHour = -1,
+        containerClass = 'h-64'
+    }: {
+        prices: HourlyPrice[];
+        thresholds: Thresholds;
+        currentHour?: number;
+        containerClass?: string;
+    } = $props();
 
     let canvas: HTMLCanvasElement;
     let chart: import('chart.js').Chart | null = null;
 
+    // hoveredBar: follows finger/mouse during motion, clears when lifted
+    // pinnedBar:  set by a tap, persists until tapped again (toggle)
+    let hoveredBar = -1;
+    let pinnedBar  = -1;
+    let selectedPrice = $state<HourlyPrice | null>(null);
+
     const COLORS: Record<string, string> = {
-        green: 'rgba(34, 197, 94, 0.85)',
-        blue: 'rgba(59, 130, 246, 0.85)',
-        amber: 'rgba(245, 158, 11, 0.85)',
-        red: 'rgba(239, 68, 68, 0.85)'
+        green: 'rgba(34, 197, 94, 0.80)',
+        blue:  'rgba(59, 130, 246, 0.80)',
+        amber: 'rgba(245, 158, 11, 0.80)',
+        red:   'rgba(239, 68, 68, 0.80)'
     };
 
-    const COLORS_CURRENT: Record<string, string> = {
+    const COLORS_DIM: Record<string, string> = {
+        green: 'rgba(34, 197, 94, 0.18)',
+        blue:  'rgba(59, 130, 246, 0.18)',
+        amber: 'rgba(245, 158, 11, 0.18)',
+        red:   'rgba(239, 68, 68, 0.18)'
+    };
+
+    const COLORS_FULL: Record<string, string> = {
         green: 'rgba(34, 197, 94, 1)',
-        blue: 'rgba(59, 130, 246, 1)',
+        blue:  'rgba(59, 130, 246, 1)',
         amber: 'rgba(245, 158, 11, 1)',
-        red: 'rgba(239, 68, 68, 1)'
+        red:   'rgba(239, 68, 68, 1)'
     };
 
-    function buildDataset(prices: HourlyPrice[]) {
-        const sorted = [...prices].sort((a, b) => a.hour - b.hour);
-        const data = sorted.map((p) => p.centPerKwh);
-        const labels = sorted.map((p) => `${String(p.hour).padStart(2, '0')}:00`);
+    function sorted() {
+        return [...prices].sort((a, b) => a.hour - b.hour);
+    }
 
-        const bgColors = sorted.map((p, i) => {
+    function buildDataset() {
+        const rows   = sorted();
+        const data   = rows.map((p) => p.centPerKwh);
+        const labels = rows.map((p) => `${String(p.hour).padStart(2, '0')}:00`);
+
+        const active       = hoveredBar >= 0 ? hoveredBar : pinnedBar;
+        const hasSelection = active >= 0;
+
+        const bgColors = rows.map((p, i) => {
             const level = getAlertLevel(p.centPerKwh, thresholds);
-            return i === currentHour ? COLORS_CURRENT[level] : COLORS[level];
+            if (hasSelection) return i === active ? COLORS_FULL[level] : COLORS_DIM[level];
+            return i === currentHour ? COLORS_FULL[level] : COLORS[level];
         });
 
-        const borderColors = sorted.map((_, i) =>
-            i === currentHour ? 'rgba(59, 130, 246, 1)' : 'transparent'
-        );
+        const borderColors = rows.map((_, i) => {
+            if (hasSelection && i === active) return 'rgba(255,255,255,0.85)';
+            if (!hasSelection && i === currentHour) return 'rgba(59,130,246,1)';
+            return 'transparent';
+        });
 
-        const borderWidths = sorted.map((_, i) => (i === currentHour ? 2 : 0));
+        const borderWidths = rows.map((_, i) => {
+            if (hasSelection && i === active) return 2.5;
+            if (!hasSelection && i === currentHour) return 2;
+            return 0;
+        });
 
         return { data, labels, bgColors, borderColors, borderWidths };
     }
 
-    async function createChart() {
-        const { Chart, BarController, BarElement, CategoryScale, LinearScale, Tooltip } =
-            await import('chart.js');
-        Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip);
+    function updateChart() {
+        if (!chart) return;
+        const { data, labels, bgColors, borderColors, borderWidths } = buildDataset();
+        chart.data.labels = labels;
+        chart.data.datasets[0].data            = data;
+        chart.data.datasets[0].backgroundColor = bgColors;
+        chart.data.datasets[0].borderColor     = borderColors;
+        chart.data.datasets[0].borderWidth     = borderWidths;
+        chart.update('none');
+    }
 
-        const { data, labels, bgColors, borderColors, borderWidths } = buildDataset(prices);
+    function syncPrice() {
+        const active  = hoveredBar >= 0 ? hoveredBar : pinnedBar;
+        selectedPrice = active >= 0 ? sorted()[active] : null;
+    }
+
+    async function createChart() {
+        const { Chart, BarController, BarElement, CategoryScale, LinearScale } =
+            await import('chart.js');
+        Chart.register(BarController, BarElement, CategoryScale, LinearScale);
+
+        const { data, labels, bgColors, borderColors, borderWidths } = buildDataset();
 
         chart = new Chart(canvas, {
             type: 'bar',
             data: {
                 labels,
-                datasets: [
-                    {
-                        data,
-                        backgroundColor: bgColors,
-                        borderColor: borderColors,
-                        borderWidth: borderWidths,
-                        borderRadius: 5,
-                        borderSkipped: false
-                    }
-                ]
+                datasets: [{
+                    data,
+                    backgroundColor: bgColors,
+                    borderColor:     borderColors,
+                    borderWidth:     borderWidths,
+                    borderRadius:    5,
+                    borderSkipped:   false
+                }]
             },
             options: {
-                responsive: true,
+                responsive:          true,
                 maintainAspectRatio: false,
-                animation: { duration: 300 },
+                animation:           { duration: 300 },
+                // intersect:false lets hover fire even between bars → smooth slide
+                interaction: { mode: 'index', intersect: false },
+                onHover: (_, elements) => {
+                    const idx = elements.length > 0 ? elements[0].index : -1;
+                    if (idx !== hoveredBar) {
+                        hoveredBar = idx;
+                        syncPrice();
+                        updateChart();
+                    }
+                },
+                onClick: (_, elements) => {
+                    const idx = elements.length > 0 ? elements[0].index : -1;
+                    pinnedBar = idx === pinnedBar ? -1 : idx;
+                    syncPrice();
+                    updateChart();
+                },
                 scales: {
                     x: {
                         grid: { display: false },
                         ticks: {
-                            maxRotation: 0,
-                            autoSkip: true,
+                            maxRotation:   0,
+                            autoSkip:      true,
                             maxTicksLimit: 8,
-                            font: { size: 11 },
-                            color: '#94a3b8'
+                            font:          { size: 11 },
+                            color:         '#94a3b8'
                         }
                     },
                     y: {
                         grid: {
-                            color: (ctx) => {
-                                if (ctx.tick.value === 0) return 'rgba(100,100,100,0.4)';
-                                return 'rgba(0,0,0,0.05)';
-                            },
-                            lineWidth: (ctx) => (ctx.tick.value === 0 ? 2 : 1)
+                            color:     (ctx) => ctx.tick.value === 0 ? 'rgba(100,100,100,0.4)' : 'rgba(0,0,0,0.05)',
+                            lineWidth: (ctx) => ctx.tick.value === 0 ? 2 : 1
                         },
                         ticks: {
                             callback: (v) => `€${(Number(v) / 100).toFixed(4).replace('.', ',')}`,
-                            font: { size: 11 },
-                            color: '#94a3b8'
+                            font:     { size: 11 },
+                            color:    '#94a3b8'
                         }
                     }
                 },
                 plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        backgroundColor: 'rgba(255,255,255,0.95)',
-                        titleColor: '#1e293b',
-                        bodyColor: '#475569',
-                        borderColor: '#e2e8f0',
-                        borderWidth: 1,
-                        cornerRadius: 10,
-                        padding: 10,
-                        callbacks: {
-                            title: (items) => {
-                                const h = items[0].dataIndex;
-                                return `${String(h).padStart(2, '0')}:00–${String(h + 1).padStart(2, '0')}:00`;
-                            },
-                            label: (item) => ` €${(Number(item.raw) / 100).toFixed(4).replace('.', ',')}/kWh`
-                        }
-                    }
+                    legend:  { display: false },
+                    tooltip: { enabled: false }
                 }
             }
         });
     }
 
-    function updateChart() {
-        if (!chart) return;
-        const { data, labels, bgColors, borderColors, borderWidths } = buildDataset(prices);
-        chart.data.labels = labels;
-        chart.data.datasets[0].data = data;
-        chart.data.datasets[0].backgroundColor = bgColors;
-        chart.data.datasets[0].borderColor = borderColors;
-        chart.data.datasets[0].borderWidth = borderWidths;
-        chart.update('none');
-    }
-
-    onMount(() => {
-        createChart();
-    });
-
-    onDestroy(() => {
-        chart?.destroy();
-    });
+    onMount(() => { createChart(); });
+    onDestroy(() => { chart?.destroy(); });
 
     $effect(() => {
-        prices; // track reactivity
-        thresholds;
-        currentHour;
-        if (chart) updateChart();
+        prices; thresholds; currentHour;
+        if (chart) {
+            hoveredBar    = -1;
+            pinnedBar     = -1;
+            selectedPrice = null;
+            updateChart();
+        }
     });
 </script>
 
-<div class="h-56 w-full">
-    <canvas bind:this={canvas}></canvas>
+<div class="flex flex-col {containerClass} w-full">
+    <div class="flex-1 min-h-0">
+        <canvas bind:this={canvas}></canvas>
+    </div>
+
+    <!-- Touch info strip -->
+    <div class="h-8 flex-shrink-0 flex items-center justify-center gap-3 text-sm select-none">
+        {#if selectedPrice}
+            <span class="text-muted-foreground tabular-nums">
+                {String(selectedPrice.hour).padStart(2, '0')}:00–{String(selectedPrice.hour + 1).padStart(2, '0')}:00
+            </span>
+            <span class="font-semibold tabular-nums">
+                {formatEuroPrice(selectedPrice.centPerKwh)}/kWh
+            </span>
+        {:else}
+            <span class="text-muted-foreground/40 text-xs">← sleep voor details →</span>
+        {/if}
+    </div>
 </div>
