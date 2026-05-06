@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount, onDestroy } from 'svelte';
+    import { onMount } from 'svelte';
     import type { HourlyPrice, Thresholds } from '$lib/types.js';
     import { getAlertLevel, formatEuroPrice } from '$lib/priceUtils.js';
 
@@ -94,6 +94,31 @@
         selectedPrice = active >= 0 ? sorted()[active] : null;
     }
 
+    // Find the bar index closest to a given canvas x-coordinate.
+    // Returns -1 if the x is outside the chart plot area.
+    function barAtX(clientX: number): number {
+        if (!chart) return -1;
+        const rect = canvas.getBoundingClientRect();
+        const x    = clientX - rect.left;
+        const ca   = chart.chartArea;
+        if (x < ca.left || x > ca.right) return -1;
+
+        const meta = chart.getDatasetMeta(0);
+        let best = -1, bestDist = Infinity;
+        for (let i = 0; i < meta.data.length; i++) {
+            const d = Math.abs((meta.data[i] as { x: number }).x - x);
+            if (d < bestDist) { bestDist = d; best = i; }
+        }
+        return best;
+    }
+
+    function handleTap(clientX: number) {
+        const idx = barAtX(clientX);
+        pinnedBar = idx === pinnedBar ? -1 : idx;
+        syncPrice();
+        updateChart();
+    }
+
     async function createChart() {
         const { Chart, BarController, BarElement, CategoryScale, LinearScale } =
             await import('chart.js');
@@ -128,12 +153,6 @@
                         updateChart();
                     }
                 },
-                onClick: (_, elements) => {
-                    const idx = elements.length > 0 ? elements[0].index : -1;
-                    pinnedBar = idx === pinnedBar ? -1 : idx;
-                    syncPrice();
-                    updateChart();
-                },
                 scales: {
                     x: {
                         grid: { display: false },
@@ -165,8 +184,48 @@
         });
     }
 
-    onMount(() => { createChart(); });
-    onDestroy(() => { chart?.destroy(); });
+    onMount(() => {
+        createChart();
+
+        // Chart.js onClick is unreliable on iOS Safari (touch-synthesised click
+        // fires with empty elements). Use native touch/click events instead.
+        let touchStartX = 0;
+        let isDrag      = false;
+
+        function onTouchStart(e: TouchEvent) {
+            touchStartX = e.touches[0].clientX;
+            isDrag      = false;
+        }
+        function onTouchMove(e: TouchEvent) {
+            if (Math.abs(e.touches[0].clientX - touchStartX) > 8) isDrag = true;
+        }
+        function onTouchEnd(e: TouchEvent) {
+            if (!isDrag) handleTap(e.changedTouches[0].clientX);
+        }
+        // Desktop mouse click (not preceded by touch)
+        let lastTouchEnd = 0;
+        function onTouchEndTime() { lastTouchEnd = Date.now(); }
+        function onClick(e: MouseEvent) {
+            // Ignore the ghost click browsers fire ~300ms after touchend
+            if (Date.now() - lastTouchEnd < 500) return;
+            handleTap(e.clientX);
+        }
+
+        canvas.addEventListener('touchstart',  onTouchStart,   { passive: true });
+        canvas.addEventListener('touchmove',   onTouchMove,    { passive: true });
+        canvas.addEventListener('touchend',    onTouchEnd,     { passive: true });
+        canvas.addEventListener('touchend',    onTouchEndTime, { passive: true });
+        canvas.addEventListener('click',       onClick);
+
+        return () => {
+            canvas.removeEventListener('touchstart',  onTouchStart);
+            canvas.removeEventListener('touchmove',   onTouchMove);
+            canvas.removeEventListener('touchend',    onTouchEnd);
+            canvas.removeEventListener('touchend',    onTouchEndTime);
+            canvas.removeEventListener('click',       onClick);
+            chart?.destroy();
+        };
+    });
 
     $effect(() => {
         prices; thresholds; currentHour;
