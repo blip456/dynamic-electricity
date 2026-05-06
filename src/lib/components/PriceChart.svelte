@@ -185,11 +185,11 @@
         }
 
         function onTouchEnd() {
-            if (touchBarCount === 1) {
-                pinnedBar = firstTouchBar === pinnedBar ? -1 : firstTouchBar;
-                syncPrice();
-                updateChart();
-            }
+            if (touchBarCount !== 1) return; // 0 = outside chart, >1 = slide
+            // Any tap clears an existing pin; tap with nothing pinned selects the bar.
+            pinnedBar = pinnedBar >= 0 ? -1 : firstTouchBar;
+            syncPrice();
+            updateChart();
         }
 
         // Desktop mouse click: hoveredBar is already set by onHover (mousemove).
@@ -200,7 +200,7 @@
         function onClick(e: MouseEvent) {
             if (Date.now() - lastTouchEndMs < 500) return;
             if (hoveredBar < 0) return;
-            pinnedBar = hoveredBar === pinnedBar ? -1 : hoveredBar;
+            pinnedBar = pinnedBar >= 0 ? -1 : hoveredBar;
             syncPrice();
             updateChart();
         }
