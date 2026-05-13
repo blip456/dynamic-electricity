@@ -18,15 +18,14 @@
     let canvas: HTMLCanvasElement;
     let chart: import('chart.js').Chart | null = null;
 
-    // hoveredBar: follows finger/mouse; clears on lift
+    // hoveredBar: follows finger/mouse during slide; clears on lift
     // pinnedBar:  persists after a tap; tap same bar to clear
-    // touchBarCount: how many distinct bars visited in this touch sequence
-    //   0 = touched outside chart, 1 = pure tap, >1 = slide
-    let hoveredBar    = -1;
-    let pinnedBar     = -1;
-    let touchBarCount = 0;
-    let firstTouchBar = -1;
-    let selectedPrice = $state<HourlyPrice | null>(null);
+    // suppressHoverUntil: timestamp until which onHover is ignored (suppresses
+    //   the synthetic mousemove Chrome fires after touchend in DevTools/browsers)
+    let hoveredBar          = -1;
+    let pinnedBar           = -1;
+    let suppressHoverUntil  = 0;
+    let selectedPrice       = $state<HourlyPrice | null>(null);
 
     const COLORS: Record<string, string> = {
         green: 'rgba(34, 197, 94, 0.80)',
@@ -124,18 +123,8 @@
                 animation:           { duration: 300 },
                 interaction: { mode: 'index', intersect: false },
                 onHover: (_, elements) => {
+                    if (Date.now() < suppressHoverUntil) return;
                     const idx = elements.length > 0 ? elements[0].index : -1;
-
-                    // Count distinct bars visited: 1 = tap, >1 = slide
-                    if (idx >= 0) {
-                        if (touchBarCount === 0) {
-                            firstTouchBar = idx;
-                            touchBarCount = 1;
-                        } else if (idx !== hoveredBar) {
-                            touchBarCount++;
-                        }
-                    }
-
                     if (idx !== hoveredBar) {
                         hoveredBar = idx;
                         syncPrice();
@@ -176,45 +165,100 @@
     onMount(() => {
         createChart();
 
-        // touchBarCount === 1 means the finger landed on exactly one bar → tap.
-        // touchBarCount > 1 means it slid across multiple bars → slide, don't pin.
-        // This avoids any pixel math and relies purely on Chart.js's own hit detection.
-        function onTouchStart() {
-            touchBarCount = 0;
-            firstTouchBar = -1;
+        // Detect which bar index sits under a touch/click point using Chart.js hit detection.
+        function getBarAtPoint(x: number, y: number): number {
+            if (!chart) return -1;
+            // Chart.js reads .native to decide whether to use e.x/e.y directly.
+            const fakeEvent = { native: true, x, y } as unknown as Event;
+            const hits = chart.getElementsAtEventForMode(fakeEvent, 'index', { intersect: false }, false);
+            return hits.length > 0 ? hits[0].index : -1;
+        }
+
+        // Touch handling: detect tapped bar at touchstart so we don't depend on
+        // onHover (which fires from touchmove and is never called on a still tap).
+        let touchStartBar = -1;
+        let touchStartX   = 0;
+        let touchStartY   = 0;
+        let touchMoved    = false;
+
+        function onTouchStart(e: TouchEvent) {
+            if (e.touches.length !== 1) return;
+            const t = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            touchStartX   = t.clientX - rect.left;
+            touchStartY   = t.clientY - rect.top;
+            touchMoved    = false;
+            touchStartBar = getBarAtPoint(touchStartX, touchStartY);
+        }
+
+        function onTouchMove(e: TouchEvent) {
+            if (e.touches.length !== 1) return;
+            const t = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const dx = (t.clientX - rect.left) - touchStartX;
+            const dy = (t.clientY - rect.top)  - touchStartY;
+            if (Math.abs(dx) > 8 || Math.abs(dy) > 8) touchMoved = true;
         }
 
         function onTouchEnd() {
-            if (touchBarCount !== 1) return; // 0 = outside chart, >1 = slide
-            // Any tap clears an existing pin; tap with nothing pinned selects the bar.
-            pinnedBar = pinnedBar >= 0 ? -1 : firstTouchBar;
+            // Always clear hoveredBar on lift and suppress the synthetic mousemove
+            // that browsers/DevTools fire after touchend (which would re-set hoveredBar).
+            hoveredBar = -1;
+            suppressHoverUntil = Date.now() + 600;
+
+            if (touchMoved) { syncPrice(); updateChart(); return; }
+            if (touchStartBar < 0) {
+                // tapped canvas but missed all bars → clear pin
+                pinnedBar = -1;
+                syncPrice();
+                updateChart();
+                return;
+            }
+            // same bar toggles off, different bar pins the new one
+            pinnedBar = touchStartBar === pinnedBar ? -1 : touchStartBar;
             syncPrice();
             updateChart();
         }
 
-        // Desktop mouse click: hoveredBar is already set by onHover (mousemove).
-        // Guard against the ghost click iOS fires ~300ms after touchend.
+        // Clear pin when the user touches anywhere outside the canvas.
+        function onDocumentTouchStart(e: TouchEvent) {
+            if (pinnedBar < 0) return;
+            if (!canvas.contains(e.target as Node)) {
+                pinnedBar = -1;
+                syncPrice();
+                updateChart();
+            }
+        }
+
+        // Desktop: guard against the ghost click iOS fires ~300ms after touchend.
         let lastTouchEndMs = 0;
         function onTouchEndTime() { lastTouchEndMs = Date.now(); }
 
-        function onClick(e: MouseEvent) {
+        function onClick() {
             if (Date.now() - lastTouchEndMs < 500) return;
-            if (hoveredBar < 0) return;
-            pinnedBar = pinnedBar >= 0 ? -1 : hoveredBar;
+            if (hoveredBar < 0) {
+                if (pinnedBar >= 0) { pinnedBar = -1; syncPrice(); updateChart(); }
+                return;
+            }
+            pinnedBar = hoveredBar === pinnedBar ? -1 : hoveredBar;
             syncPrice();
             updateChart();
         }
 
-        canvas.addEventListener('touchstart', onTouchStart,   { passive: true });
-        canvas.addEventListener('touchend',   onTouchEnd,     { passive: true });
-        canvas.addEventListener('touchend',   onTouchEndTime, { passive: true });
+        canvas.addEventListener('touchstart', onTouchStart,           { passive: true });
+        canvas.addEventListener('touchmove',  onTouchMove,            { passive: true });
+        canvas.addEventListener('touchend',   onTouchEnd,             { passive: true });
+        canvas.addEventListener('touchend',   onTouchEndTime,         { passive: true });
         canvas.addEventListener('click',      onClick);
+        document.addEventListener('touchstart', onDocumentTouchStart, { passive: true });
 
         return () => {
             canvas.removeEventListener('touchstart', onTouchStart);
+            canvas.removeEventListener('touchmove',  onTouchMove);
             canvas.removeEventListener('touchend',   onTouchEnd);
             canvas.removeEventListener('touchend',   onTouchEndTime);
             canvas.removeEventListener('click',      onClick);
+            document.removeEventListener('touchstart', onDocumentTouchStart);
             chart?.destroy();
         };
     });
