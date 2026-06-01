@@ -11,7 +11,8 @@
         getTodayBelgian,
         getTomorrowBelgian,
         getCurrentBelgianHour,
-        formatBelgianDate
+        formatBelgianDate,
+        formatEuroPrice
     } from '$lib/priceUtils.js';
 
     let { data } = $props();
@@ -97,6 +98,48 @@
         isNavigating = true;
         goto('/', { replaceState: false, noScroll: true });
     }
+
+    // Daily totals — only when meter data is available for the displayed date
+    const dayTotals = $derived.by(() => {
+        if (isNavigating || data.prices.length === 0) return null;
+        const dayData = meterStore.forDate(localDate);
+        if (dayData.length === 0) return null;
+
+        let totalConsumption = 0;
+        let totalInjection   = 0;
+        let actualCost       = 0;   // €
+        let goedkoopCost     = 0;   // € at thresholds.blue c/kWh
+        let hoursMatched     = 0;
+
+        for (const m of dayData) {
+            const price = data.prices.find((p) => p.hour === m.hour);
+            if (!price) continue;
+            totalConsumption += m.consumptionKwh;
+            totalInjection   += m.injectionKwh;
+            const netKwh = m.consumptionKwh - m.injectionKwh;
+            actualCost   += (netKwh * price.centPerKwh)         / 100;
+            goedkoopCost += (netKwh * settings.thresholds.blue) / 100;
+            hoursMatched++;
+        }
+
+        if (hoursMatched === 0) return null;
+
+        const netKwh     = totalConsumption - totalInjection;
+        const savings    = goedkoopCost - actualCost;  // positive = paid less than goedkoop
+        const savingsPct = goedkoopCost !== 0 ? (savings / Math.abs(goedkoopCost)) * 100 : 0;
+        const avgCentPerKwh = netKwh !== 0 ? (actualCost / netKwh) * 100 : 0;
+
+        return {
+            totalConsumption: Math.round(totalConsumption * 1000) / 1000,
+            totalInjection:   Math.round(totalInjection   * 1000) / 1000,
+            netKwh:           Math.round(netKwh           * 1000) / 1000,
+            actualCost,
+            goedkoopCost,
+            savings,
+            savingsPct,
+            avgCentPerKwh,
+        };
+    });
 </script>
 
 <svelte:head>
@@ -293,6 +336,68 @@
             <AlertBadge level="amber" label="Goedkoop (≤ €0,1500)" />
             <AlertBadge level="red" label="Duur (> €0,1500)" />
         </div>
+
+        <!-- Daily summary (shown only when meter data is loaded for this date) -->
+        {#if dayTotals}
+        <div class="bg-card rounded-2xl border shadow-sm overflow-hidden">
+            <div class="px-4 py-3 border-b">
+                <span class="text-sm font-semibold text-foreground">Dagoverzicht</span>
+            </div>
+            <div class="px-4 py-4 flex flex-col gap-4">
+
+                <!-- kWh row -->
+                <div class="flex gap-3">
+                    <div class="flex-1">
+                        <p class="text-xs text-muted-foreground mb-0.5">Verbruik</p>
+                        <p class="font-semibold tabular-nums text-sm">{dayTotals.totalConsumption.toFixed(2)} kWh</p>
+                    </div>
+                    {#if dayTotals.totalInjection > 0}
+                    <div class="flex-1">
+                        <p class="text-xs text-muted-foreground mb-0.5">Injectie (zon)</p>
+                        <p class="font-semibold tabular-nums text-sm text-blue-500">{dayTotals.totalInjection.toFixed(2)} kWh</p>
+                    </div>
+                    {/if}
+                    <div class="flex-1">
+                        <p class="text-xs text-muted-foreground mb-0.5">Netto</p>
+                        <p class="font-semibold tabular-nums text-sm">{dayTotals.netKwh.toFixed(2)} kWh</p>
+                    </div>
+                </div>
+
+                <!-- Cost comparison boxes -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="bg-accent rounded-xl p-3">
+                        <p class="text-xs text-muted-foreground mb-1">Werkelijke kost</p>
+                        <p class="font-bold text-xl tabular-nums {dayTotals.actualCost < 0 ? 'text-green-500' : ''}">
+                            {dayTotals.actualCost < 0 ? '−' : ''}€{Math.abs(dayTotals.actualCost).toFixed(2)}
+                        </p>
+                    </div>
+                    <div class="bg-accent rounded-xl p-3">
+                        <p class="text-xs text-muted-foreground mb-1">Bij goedkoop tarief</p>
+                        <p class="font-bold text-xl tabular-nums">
+                            {dayTotals.goedkoopCost < 0 ? '−' : ''}€{Math.abs(dayTotals.goedkoopCost).toFixed(2)}
+                        </p>
+                        <p class="text-xs text-muted-foreground mt-0.5">{formatEuroPrice(settings.thresholds.blue)}/kWh</p>
+                    </div>
+                </div>
+
+                <!-- Savings + avg price -->
+                <div class="flex gap-3">
+                    <div class="flex-1">
+                        <p class="text-xs text-muted-foreground mb-0.5">Besparing vs goedkoop</p>
+                        <p class="font-semibold tabular-nums text-sm {dayTotals.savings >= 0 ? 'text-green-500' : 'text-red-400'}">
+                            {dayTotals.savings >= 0 ? '+' : '−'}€{Math.abs(dayTotals.savings).toFixed(2)}
+                            <span class="text-xs font-normal opacity-70">({dayTotals.savings >= 0 ? '+' : ''}{dayTotals.savingsPct.toFixed(0)}%)</span>
+                        </p>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-xs text-muted-foreground mb-0.5">Gem. prijs betaald</p>
+                        <p class="font-semibold tabular-nums text-sm">{formatEuroPrice(dayTotals.avgCentPerKwh)}/kWh</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        {/if}
 
     </div>
 </div>
