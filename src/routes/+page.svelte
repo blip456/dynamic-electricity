@@ -82,11 +82,12 @@
         return () => window.removeEventListener('resize', updateOrientation);
     });
 
+    const pad = (n: number) => String(n).padStart(2, '0');
+
     function navigate(dir: -1 | 1) {
         const [y, m, d] = localDate.split('-').map(Number);
         const next = new Date(y, m - 1, d);
         next.setDate(next.getDate() + dir);
-        const pad = (n: number) => String(n).padStart(2, '0');
         const newDate = `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
         localDate    = newDate;
         isNavigating = true;
@@ -101,17 +102,15 @@
 
     // ── Period overview ───────────────────────────────────────────────────────
 
-    type Period = 'dag' | 'week' | 'maand' | 'jaar';
-    let overviewPeriod   = $state<Period>('dag');
+    type Period = 'week' | 'maand' | 'jaar';
+    let overviewPeriod   = $state<Period>('week');
     let isLoadingPeriod  = $state(false);
 
-    // price cache keyed by date — seeded with today's loaded prices
+    // price cache keyed by date — direct property write avoids reactive self-loop
     let priceCache = $state<Record<string, import('$lib/types.js').HourlyPrice[]>>({});
     $effect(() => {
-        if (data.prices.length > 0) priceCache = { ...priceCache, [data.date]: data.prices };
+        if (data.prices.length > 0) priceCache[data.date] = data.prices;
     });
-
-    const pad = (n: number) => String(n).padStart(2, '0');
 
     function isoFromDate(d: Date) {
         return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
@@ -119,7 +118,6 @@
 
     const periodRange = $derived.by((): { from: string; to: string } => {
         const [y, m, d] = localDate.split('-').map(Number);
-        if (overviewPeriod === 'dag') return { from: localDate, to: localDate };
         if (overviewPeriod === 'week') {
             const ref = new Date(Date.UTC(y, m - 1, d));
             const dow = ref.getUTCDay(); // 0=Sun
@@ -138,7 +136,7 @@
     // Fetch prices whenever we switch to week/month and the range changes
     $effect(() => {
         const { from, to } = periodRange;
-        if (overviewPeriod === 'dag' || overviewPeriod === 'jaar') return;
+        if (overviewPeriod === 'jaar') return;
 
         // Collect which dates in range still need prices
         const missing: string[] = [];
@@ -178,9 +176,7 @@
         let totalHours       = 0;
 
         for (const [date, dayData] of dayEntries) {
-            const dayPrices = overviewPeriod === 'dag'
-                ? data.prices           // use already-loaded prices for day view
-                : (priceCache[date] ?? []);
+            const dayPrices = priceCache[date] ?? [];
 
             for (const m of dayData) {
                 totalConsumption += m.consumptionKwh;
@@ -223,7 +219,6 @@
 
     const periodLabel = $derived.by(() => {
         const { from, to } = periodRange;
-        if (overviewPeriod === 'dag') return null; // header not needed — date nav already shows it
         if (overviewPeriod === 'jaar') return from.slice(0, 4);
 
         const [fy, fm, fd] = from.split('-').map(Number);
@@ -441,7 +436,7 @@
             <!-- Header: period tabs -->
             <div class="flex items-center justify-between px-4 py-3 border-b">
                 <div class="flex gap-1">
-                    {#each (['dag', 'week', 'maand', 'jaar'] as const) as p}
+                    {#each (['week', 'maand', 'jaar'] as const) as p}
                         <button
                             onclick={() => overviewPeriod = p}
                             class="text-xs font-medium px-2.5 py-1 rounded-lg transition-colors capitalize
@@ -463,7 +458,7 @@
                 </div>
             {:else if !periodTotals}
                 <div class="flex items-center justify-center h-24 text-muted-foreground text-xs">
-                    Geen verbruiksdata voor {overviewPeriod === 'dag' ? 'deze dag' : overviewPeriod === 'week' ? 'deze week' : overviewPeriod === 'maand' ? 'deze maand' : 'dit jaar'}.
+                    Geen verbruiksdata voor {overviewPeriod === 'week' ? 'deze week' : overviewPeriod === 'maand' ? 'deze maand' : 'dit jaar'}.
                     Upload data via instellingen.
                 </div>
             {:else}
@@ -485,16 +480,13 @@
                             <p class="text-xs text-muted-foreground mb-0.5">Netto</p>
                             <p class="font-semibold tabular-nums text-sm">{periodTotals.netKwh.toFixed(2)} kWh</p>
                         </div>
-                        {#if overviewPeriod !== 'dag'}
                         <div class="flex-1">
                             <p class="text-xs text-muted-foreground mb-0.5">Dagen</p>
                             <p class="font-semibold tabular-nums text-sm">{periodTotals.dayCount}</p>
                         </div>
-                        {/if}
                     </div>
 
-                    <!-- Cost comparison -->
-                    {#if periodTotals.hasCost || overviewPeriod === 'jaar'}
+                    <!-- Cost comparison (always shown — goedkoop always available; actual cost when prices cached) -->
                     <div class="grid grid-cols-2 gap-2">
                         <div class="bg-accent rounded-xl p-3">
                             <p class="text-xs text-muted-foreground mb-1">
@@ -508,7 +500,7 @@
                                     {periodTotals.actualCost < 0 ? '−' : ''}€{Math.abs(periodTotals.actualCost).toFixed(2)}
                                 </p>
                             {:else}
-                                <p class="text-sm text-muted-foreground italic">Laden...</p>
+                                <p class="text-sm text-muted-foreground italic">–</p>
                             {/if}
                         </div>
                         <div class="bg-accent rounded-xl p-3">
@@ -519,9 +511,8 @@
                             <p class="text-xs text-muted-foreground mt-0.5">{formatEuroPrice(settings.thresholds.blue)}/kWh</p>
                         </div>
                     </div>
-                    {/if}
 
-                    <!-- Savings + avg price -->
+                    <!-- Savings + avg price (only when we have actual cost data) -->
                     {#if periodTotals.hasCost}
                     <div class="flex gap-3">
                         <div class="flex-1">
