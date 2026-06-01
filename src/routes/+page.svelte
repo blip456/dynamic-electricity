@@ -102,8 +102,8 @@
 
     // ── Period overview ───────────────────────────────────────────────────────
 
-    type Period = 'week' | 'maand' | 'jaar';
-    let overviewPeriod   = $state<Period>('week');
+    type Period = 'dag' | 'week' | 'maand';
+    let overviewPeriod   = $state<Period>('dag');
     let isLoadingPeriod  = $state(false);
 
     // price cache keyed by date — direct property write avoids reactive self-loop
@@ -118,6 +118,7 @@
 
     const periodRange = $derived.by((): { from: string; to: string } => {
         const [y, m, d] = localDate.split('-').map(Number);
+        if (overviewPeriod === 'dag') return { from: localDate, to: localDate };
         if (overviewPeriod === 'week') {
             const ref = new Date(Date.UTC(y, m - 1, d));
             const dow = ref.getUTCDay(); // 0=Sun
@@ -125,18 +126,15 @@
             const sun = new Date(mon); sun.setUTCDate(mon.getUTCDate() + 6);
             return { from: isoFromDate(mon), to: isoFromDate(sun) };
         }
-        if (overviewPeriod === 'maand') {
-            const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-            return { from: `${y}-${pad(m)}-01`, to: `${y}-${pad(m)}-${pad(last)}` };
-        }
-        // jaar
-        return { from: `${y}-01-01`, to: `${y}-12-31` };
+        // maand
+        const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+        return { from: `${y}-${pad(m)}-01`, to: `${y}-${pad(m)}-${pad(last)}` };
     });
 
-    // Fetch prices whenever we switch to week/month and the range changes
+    // Fetch prices for week/month ranges when dates are missing from cache
     $effect(() => {
         const { from, to } = periodRange;
-        if (overviewPeriod === 'jaar') return;
+        if (overviewPeriod === 'dag') return; // already in cache from page load
 
         // Collect which dates in range still need prices
         const missing: string[] = [];
@@ -153,7 +151,8 @@
         fetch(`/api/prices/range?from=${from}&to=${to}`)
             .then((r) => r.json())
             .then((body: { prices: Record<string, import('$lib/types.js').HourlyPrice[]> }) => {
-                priceCache = { ...priceCache, ...body.prices };
+                // Assign per-key to avoid stale-closure overwrite and avoid reactive self-loop
+                for (const [d, prices] of Object.entries(body.prices)) priceCache[d] = prices;
             })
             .catch(() => { /* silently ignore — totals will just lack cost data */ })
             .finally(() => { isLoadingPeriod = false; });
@@ -218,15 +217,11 @@
     const MONTHS_NL = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
 
     const periodLabel = $derived.by(() => {
+        if (overviewPeriod === 'dag') return null; // date already shown in chart nav
         const { from, to } = periodRange;
-        if (overviewPeriod === 'jaar') return from.slice(0, 4);
-
         const [fy, fm, fd] = from.split('-').map(Number);
         const [ty, tm, td] = to.split('-').map(Number);
-
-        if (overviewPeriod === 'maand') {
-            return `${MONTHS_NL[fm - 1]} ${fy}`;
-        }
+        if (overviewPeriod === 'maand') return `${MONTHS_NL[fm - 1]} ${fy}`;
         // week
         const fromStr = `${fd} ${MONTHS_NL[fm - 1]}`;
         const toStr   = fm === tm ? `${td} ${MONTHS_NL[tm - 1]}` : `${td} ${MONTHS_NL[tm - 1]} ${ty}`;
@@ -436,7 +431,7 @@
             <!-- Header: period tabs -->
             <div class="flex items-center justify-between px-4 py-3 border-b">
                 <div class="flex gap-1">
-                    {#each (['week', 'maand', 'jaar'] as const) as p}
+                    {#each (['dag', 'week', 'maand'] as const) as p}
                         <button
                             onclick={() => overviewPeriod = p}
                             class="text-xs font-medium px-2.5 py-1 rounded-lg transition-colors capitalize
@@ -458,7 +453,7 @@
                 </div>
             {:else if !periodTotals}
                 <div class="flex items-center justify-center h-24 text-muted-foreground text-xs">
-                    Geen verbruiksdata voor {overviewPeriod === 'week' ? 'deze week' : overviewPeriod === 'maand' ? 'deze maand' : 'dit jaar'}.
+                    Geen verbruiksdata voor {overviewPeriod === 'dag' ? 'deze dag' : overviewPeriod === 'week' ? 'deze week' : 'deze maand'}.
                     Upload data via instellingen.
                 </div>
             {:else}
@@ -480,10 +475,12 @@
                             <p class="text-xs text-muted-foreground mb-0.5">Netto</p>
                             <p class="font-semibold tabular-nums text-sm">{periodTotals.netKwh.toFixed(2)} kWh</p>
                         </div>
+                        {#if overviewPeriod !== 'dag'}
                         <div class="flex-1">
                             <p class="text-xs text-muted-foreground mb-0.5">Dagen</p>
                             <p class="font-semibold tabular-nums text-sm">{periodTotals.dayCount}</p>
                         </div>
+                        {/if}
                     </div>
 
                     <!-- Cost comparison (always shown — goedkoop always available; actual cost when prices cached) -->
