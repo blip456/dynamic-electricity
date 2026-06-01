@@ -99,35 +99,110 @@
         goto('/', { replaceState: false, noScroll: true });
     }
 
-    // Daily totals — only when meter data is available for the displayed date
-    const dayTotals = $derived.by(() => {
-        if (isNavigating || data.prices.length === 0) return null;
-        const dayData = meterStore.forDate(localDate);
-        if (dayData.length === 0) return null;
+    // ── Period overview ───────────────────────────────────────────────────────
+
+    type Period = 'dag' | 'week' | 'maand' | 'jaar';
+    let overviewPeriod   = $state<Period>('dag');
+    let isLoadingPeriod  = $state(false);
+
+    // price cache keyed by date — seeded with today's loaded prices
+    let priceCache = $state<Record<string, import('$lib/types.js').HourlyPrice[]>>({});
+    $effect(() => {
+        if (data.prices.length > 0) priceCache = { ...priceCache, [data.date]: data.prices };
+    });
+
+    const pad = (n: number) => String(n).padStart(2, '0');
+
+    function isoFromDate(d: Date) {
+        return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+    }
+
+    const periodRange = $derived.by((): { from: string; to: string } => {
+        const [y, m, d] = localDate.split('-').map(Number);
+        if (overviewPeriod === 'dag') return { from: localDate, to: localDate };
+        if (overviewPeriod === 'week') {
+            const ref = new Date(Date.UTC(y, m - 1, d));
+            const dow = ref.getUTCDay(); // 0=Sun
+            const mon = new Date(ref); mon.setUTCDate(d - ((dow + 6) % 7));
+            const sun = new Date(mon); sun.setUTCDate(mon.getUTCDate() + 6);
+            return { from: isoFromDate(mon), to: isoFromDate(sun) };
+        }
+        if (overviewPeriod === 'maand') {
+            const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+            return { from: `${y}-${pad(m)}-01`, to: `${y}-${pad(m)}-${pad(last)}` };
+        }
+        // jaar
+        return { from: `${y}-01-01`, to: `${y}-12-31` };
+    });
+
+    // Fetch prices whenever we switch to week/month and the range changes
+    $effect(() => {
+        const { from, to } = periodRange;
+        if (overviewPeriod === 'dag' || overviewPeriod === 'jaar') return;
+
+        // Collect which dates in range still need prices
+        const missing: string[] = [];
+        const cursor = new Date(from + 'T00:00:00Z');
+        const end    = new Date(to   + 'T00:00:00Z');
+        while (cursor <= end) {
+            const iso = isoFromDate(cursor);
+            if (!priceCache[iso]) missing.push(iso);
+            cursor.setUTCDate(cursor.getUTCDate() + 1);
+        }
+        if (missing.length === 0) return;
+
+        isLoadingPeriod = true;
+        fetch(`/api/prices/range?from=${from}&to=${to}`)
+            .then((r) => r.json())
+            .then((body: { prices: Record<string, import('$lib/types.js').HourlyPrice[]> }) => {
+                priceCache = { ...priceCache, ...body.prices };
+            })
+            .catch(() => { /* silently ignore — totals will just lack cost data */ })
+            .finally(() => { isLoadingPeriod = false; });
+    });
+
+    // Aggregate totals for the selected period
+    const periodTotals = $derived.by(() => {
+        if (isNavigating) return null;
+        const { from, to } = periodRange;
+
+        // Collect meter days that fall in range
+        const dayEntries = Object.entries(meterStore.data).filter(([d]) => d >= from && d <= to);
+        if (dayEntries.length === 0) return null;
 
         let totalConsumption = 0;
         let totalInjection   = 0;
-        let actualCost       = 0;   // €
-        let goedkoopCost     = 0;   // € at thresholds.blue c/kWh
-        let hoursMatched     = 0;
+        let actualCost       = 0;
+        let goedkoopCost     = 0;
+        let costHours        = 0;
+        let totalHours       = 0;
 
-        for (const m of dayData) {
-            const price = data.prices.find((p) => p.hour === m.hour);
-            if (!price) continue;
-            totalConsumption += m.consumptionKwh;
-            totalInjection   += m.injectionKwh;
-            const netKwh = m.consumptionKwh - m.injectionKwh;
-            actualCost   += (netKwh * price.centPerKwh)         / 100;
-            goedkoopCost += (netKwh * settings.thresholds.blue) / 100;
-            hoursMatched++;
+        for (const [date, dayData] of dayEntries) {
+            const dayPrices = overviewPeriod === 'dag'
+                ? data.prices           // use already-loaded prices for day view
+                : (priceCache[date] ?? []);
+
+            for (const m of dayData) {
+                totalConsumption += m.consumptionKwh;
+                totalInjection   += m.injectionKwh;
+                const netKwh = m.consumptionKwh - m.injectionKwh;
+                goedkoopCost += (netKwh * settings.thresholds.blue) / 100;
+                totalHours++;
+
+                const price = dayPrices.find((p) => p.hour === m.hour);
+                if (price) {
+                    actualCost += (netKwh * price.centPerKwh) / 100;
+                    costHours++;
+                }
+            }
         }
 
-        if (hoursMatched === 0) return null;
-
-        const netKwh     = totalConsumption - totalInjection;
-        const savings    = goedkoopCost - actualCost;  // positive = paid less than goedkoop
-        const savingsPct = goedkoopCost !== 0 ? (savings / Math.abs(goedkoopCost)) * 100 : 0;
-        const avgCentPerKwh = netKwh !== 0 ? (actualCost / netKwh) * 100 : 0;
+        const netKwh         = totalConsumption - totalInjection;
+        const hasCost        = costHours > 0;
+        const costIsComplete = costHours === totalHours;
+        const savings        = goedkoopCost - actualCost;
+        const savingsPct     = hasCost && goedkoopCost !== 0 ? (savings / Math.abs(goedkoopCost)) * 100 : 0;
+        const avgCentPerKwh  = hasCost && netKwh !== 0 ? (actualCost / netKwh) * 100 : 0;
 
         return {
             totalConsumption: Math.round(totalConsumption * 1000) / 1000,
@@ -138,7 +213,29 @@
             savings,
             savingsPct,
             avgCentPerKwh,
+            hasCost,
+            costIsComplete,
+            dayCount:         dayEntries.length,
         };
+    });
+
+    const MONTHS_NL = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+
+    const periodLabel = $derived.by(() => {
+        const { from, to } = periodRange;
+        if (overviewPeriod === 'dag') return null; // header not needed — date nav already shows it
+        if (overviewPeriod === 'jaar') return from.slice(0, 4);
+
+        const [fy, fm, fd] = from.split('-').map(Number);
+        const [ty, tm, td] = to.split('-').map(Number);
+
+        if (overviewPeriod === 'maand') {
+            return `${MONTHS_NL[fm - 1]} ${fy}`;
+        }
+        // week
+        const fromStr = `${fd} ${MONTHS_NL[fm - 1]}`;
+        const toStr   = fm === tm ? `${td} ${MONTHS_NL[tm - 1]}` : `${td} ${MONTHS_NL[tm - 1]} ${ty}`;
+        return `${fromStr} – ${toStr}`;
     });
 </script>
 
@@ -337,65 +434,120 @@
             <AlertBadge level="red" label="Duur (> €0,1500)" />
         </div>
 
-        <!-- Daily summary (shown only when meter data is loaded for this date) -->
-        {#if dayTotals}
+        <!-- Period overview (shown only when any meter data is present) -->
+        {#if meterStore.dateCount > 0}
         <div class="bg-card rounded-2xl border shadow-sm overflow-hidden">
-            <div class="px-4 py-3 border-b">
-                <span class="text-sm font-semibold text-foreground">Dagoverzicht</span>
-            </div>
-            <div class="px-4 py-4 flex flex-col gap-4">
 
-                <!-- kWh row -->
-                <div class="flex gap-3">
-                    <div class="flex-1">
-                        <p class="text-xs text-muted-foreground mb-0.5">Verbruik</p>
-                        <p class="font-semibold tabular-nums text-sm">{dayTotals.totalConsumption.toFixed(2)} kWh</p>
+            <!-- Header: period tabs -->
+            <div class="flex items-center justify-between px-4 py-3 border-b">
+                <div class="flex gap-1">
+                    {#each (['dag', 'week', 'maand', 'jaar'] as const) as p}
+                        <button
+                            onclick={() => overviewPeriod = p}
+                            class="text-xs font-medium px-2.5 py-1 rounded-lg transition-colors capitalize
+                                {overviewPeriod === p
+                                    ? 'bg-foreground text-background'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
+                        >{p}</button>
+                    {/each}
+                </div>
+                {#if periodLabel}
+                    <span class="text-xs text-muted-foreground">{periodLabel}</span>
+                {/if}
+            </div>
+
+            <!-- Body -->
+            {#if isLoadingPeriod && !periodTotals}
+                <div class="flex items-center justify-center h-32">
+                    <div class="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                </div>
+            {:else if !periodTotals}
+                <div class="flex items-center justify-center h-24 text-muted-foreground text-xs">
+                    Geen verbruiksdata voor {overviewPeriod === 'dag' ? 'deze dag' : overviewPeriod === 'week' ? 'deze week' : overviewPeriod === 'maand' ? 'deze maand' : 'dit jaar'}.
+                    Upload data via instellingen.
+                </div>
+            {:else}
+                <div class="px-4 py-4 flex flex-col gap-4">
+
+                    <!-- kWh row -->
+                    <div class="flex gap-3">
+                        <div class="flex-1">
+                            <p class="text-xs text-muted-foreground mb-0.5">Verbruik</p>
+                            <p class="font-semibold tabular-nums text-sm">{periodTotals.totalConsumption.toFixed(2)} kWh</p>
+                        </div>
+                        {#if periodTotals.totalInjection > 0}
+                        <div class="flex-1">
+                            <p class="text-xs text-muted-foreground mb-0.5">Injectie (zon)</p>
+                            <p class="font-semibold tabular-nums text-sm text-blue-500">{periodTotals.totalInjection.toFixed(2)} kWh</p>
+                        </div>
+                        {/if}
+                        <div class="flex-1">
+                            <p class="text-xs text-muted-foreground mb-0.5">Netto</p>
+                            <p class="font-semibold tabular-nums text-sm">{periodTotals.netKwh.toFixed(2)} kWh</p>
+                        </div>
+                        {#if overviewPeriod !== 'dag'}
+                        <div class="flex-1">
+                            <p class="text-xs text-muted-foreground mb-0.5">Dagen</p>
+                            <p class="font-semibold tabular-nums text-sm">{periodTotals.dayCount}</p>
+                        </div>
+                        {/if}
                     </div>
-                    {#if dayTotals.totalInjection > 0}
-                    <div class="flex-1">
-                        <p class="text-xs text-muted-foreground mb-0.5">Injectie (zon)</p>
-                        <p class="font-semibold tabular-nums text-sm text-blue-500">{dayTotals.totalInjection.toFixed(2)} kWh</p>
+
+                    <!-- Cost comparison -->
+                    {#if periodTotals.hasCost || overviewPeriod === 'jaar'}
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="bg-accent rounded-xl p-3">
+                            <p class="text-xs text-muted-foreground mb-1">
+                                Werkelijke kost
+                                {#if !periodTotals.costIsComplete && periodTotals.hasCost}
+                                    <span class="opacity-60">(gedeeltelijk)</span>
+                                {/if}
+                            </p>
+                            {#if periodTotals.hasCost}
+                                <p class="font-bold text-xl tabular-nums {periodTotals.actualCost < 0 ? 'text-green-500' : ''}">
+                                    {periodTotals.actualCost < 0 ? '−' : ''}€{Math.abs(periodTotals.actualCost).toFixed(2)}
+                                </p>
+                            {:else}
+                                <p class="text-sm text-muted-foreground italic">Laden...</p>
+                            {/if}
+                        </div>
+                        <div class="bg-accent rounded-xl p-3">
+                            <p class="text-xs text-muted-foreground mb-1">Bij goedkoop tarief</p>
+                            <p class="font-bold text-xl tabular-nums">
+                                {periodTotals.goedkoopCost < 0 ? '−' : ''}€{Math.abs(periodTotals.goedkoopCost).toFixed(2)}
+                            </p>
+                            <p class="text-xs text-muted-foreground mt-0.5">{formatEuroPrice(settings.thresholds.blue)}/kWh</p>
+                        </div>
                     </div>
                     {/if}
-                    <div class="flex-1">
-                        <p class="text-xs text-muted-foreground mb-0.5">Netto</p>
-                        <p class="font-semibold tabular-nums text-sm">{dayTotals.netKwh.toFixed(2)} kWh</p>
-                    </div>
-                </div>
 
-                <!-- Cost comparison boxes -->
-                <div class="grid grid-cols-2 gap-2">
-                    <div class="bg-accent rounded-xl p-3">
-                        <p class="text-xs text-muted-foreground mb-1">Werkelijke kost</p>
-                        <p class="font-bold text-xl tabular-nums {dayTotals.actualCost < 0 ? 'text-green-500' : ''}">
-                            {dayTotals.actualCost < 0 ? '−' : ''}€{Math.abs(dayTotals.actualCost).toFixed(2)}
-                        </p>
+                    <!-- Savings + avg price -->
+                    {#if periodTotals.hasCost}
+                    <div class="flex gap-3">
+                        <div class="flex-1">
+                            <p class="text-xs text-muted-foreground mb-0.5">Besparing vs goedkoop</p>
+                            <p class="font-semibold tabular-nums text-sm {periodTotals.savings >= 0 ? 'text-green-500' : 'text-red-400'}">
+                                {periodTotals.savings >= 0 ? '+' : '−'}€{Math.abs(periodTotals.savings).toFixed(2)}
+                                <span class="text-xs font-normal opacity-70">({periodTotals.savings >= 0 ? '+' : ''}{periodTotals.savingsPct.toFixed(0)}%)</span>
+                            </p>
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-xs text-muted-foreground mb-0.5">Gem. prijs betaald</p>
+                            <p class="font-semibold tabular-nums text-sm">{formatEuroPrice(periodTotals.avgCentPerKwh)}/kWh</p>
+                        </div>
                     </div>
-                    <div class="bg-accent rounded-xl p-3">
-                        <p class="text-xs text-muted-foreground mb-1">Bij goedkoop tarief</p>
-                        <p class="font-bold text-xl tabular-nums">
-                            {dayTotals.goedkoopCost < 0 ? '−' : ''}€{Math.abs(dayTotals.goedkoopCost).toFixed(2)}
-                        </p>
-                        <p class="text-xs text-muted-foreground mt-0.5">{formatEuroPrice(settings.thresholds.blue)}/kWh</p>
-                    </div>
-                </div>
+                    {/if}
 
-                <!-- Savings + avg price -->
-                <div class="flex gap-3">
-                    <div class="flex-1">
-                        <p class="text-xs text-muted-foreground mb-0.5">Besparing vs goedkoop</p>
-                        <p class="font-semibold tabular-nums text-sm {dayTotals.savings >= 0 ? 'text-green-500' : 'text-red-400'}">
-                            {dayTotals.savings >= 0 ? '+' : '−'}€{Math.abs(dayTotals.savings).toFixed(2)}
-                            <span class="text-xs font-normal opacity-70">({dayTotals.savings >= 0 ? '+' : ''}{dayTotals.savingsPct.toFixed(0)}%)</span>
-                        </p>
+                    <!-- Loading indicator while prices complete in background -->
+                    {#if isLoadingPeriod}
+                    <div class="flex items-center gap-2 text-xs text-muted-foreground">
+                        <div class="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+                        Prijzen laden…
                     </div>
-                    <div class="flex-1">
-                        <p class="text-xs text-muted-foreground mb-0.5">Gem. prijs betaald</p>
-                        <p class="font-semibold tabular-nums text-sm">{formatEuroPrice(dayTotals.avgCentPerKwh)}/kWh</p>
-                    </div>
-                </div>
+                    {/if}
 
-            </div>
+                </div>
+            {/if}
         </div>
         {/if}
 
