@@ -27,6 +27,12 @@ export interface StoredSubscription {
     createdAt: string;
 }
 
+export interface HourlyMeterData {
+    hour: number;            // 0–23
+    consumptionKwh: number;  // Afname Dag + Nacht summed for this hour
+    injectionKwh: number;    // Injectie Dag + Nacht (solar export)
+}
+
 export interface PushPayload {
     title: string;
     body: string;
