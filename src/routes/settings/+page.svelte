@@ -1,7 +1,9 @@
 <script lang="ts">
-    import { ArrowLeft, Bell, BellOff, Zap } from '@lucide/svelte';
+    import { ArrowLeft, Bell, BellOff, Zap, Upload, Trash2 } from '@lucide/svelte';
     import { browser } from '$app/environment';
     import { settings } from '$lib/stores.svelte.js';
+    import { meterStore } from '$lib/meterStore.svelte.js';
+    import { parseFluviusCsv } from '$lib/fluviusParser.js';
     import { subscribeToPush, unsubscribeFromPush, getNotificationPermission } from '$lib/notifications.js';
     import { formatEuroPrice } from '$lib/priceUtils.js';
 
@@ -66,6 +68,37 @@
 
     function clamp(value: number, min: number, max: number) {
         return Math.min(Math.max(value, min), max);
+    }
+
+    let uploadStatus = $state<'idle' | 'success' | 'error'>('idle');
+    let uploadMsg    = $state('');
+
+    function formatDate(iso: string) {
+        const [y, m, d] = iso.split('-');
+        return `${d}/${m}/${y}`;
+    }
+
+    async function handleFileUpload(e: Event) {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        uploadStatus = 'idle';
+        try {
+            const text   = await file.text();
+            const result = parseFluviusCsv(text);
+            if (result.daysFound === 0) {
+                uploadStatus = 'error';
+                uploadMsg    = 'Geen geldige Fluvius-data gevonden in het bestand.';
+                return;
+            }
+            meterStore.merge(result.data);
+            uploadStatus = 'success';
+            uploadMsg    = `${result.daysFound} dag${result.daysFound !== 1 ? 'en' : ''} geïmporteerd (${result.rowsRead} metingen).`;
+        } catch {
+            uploadStatus = 'error';
+            uploadMsg    = 'Bestand kon niet worden verwerkt.';
+        }
+        // Reset file input so the same file can be re-imported
+        (e.target as HTMLInputElement).value = '';
     }
 </script>
 
@@ -269,18 +302,56 @@
             </div>
         </section>
 
-        <!-- Fluvius stub (Phase 2) -->
-        <section class="bg-card rounded-2xl border border-dashed shadow-sm overflow-hidden opacity-50 pointer-events-none select-none">
+        <!-- Fluvius meter data -->
+        <section class="bg-card rounded-2xl border shadow-sm overflow-hidden">
             <div class="px-4 py-3 border-b">
-                <h2 class="text-sm font-semibold text-foreground">Fluvius-koppeling (binnenkort)</h2>
+                <h2 class="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <Upload size={16} />
+                    Fluvius verbruiksdata
+                </h2>
             </div>
-            <div class="p-4">
-                <p class="text-sm text-muted-foreground mb-3">
-                    Koppel uw digitale meter om uw historisch verbruik te overlappen met de prijsgrafiek.
+            <div class="p-4 flex flex-col gap-4">
+                <p class="text-xs text-muted-foreground">
+                    Importeer een CSV-export van Mijn Fluvius (digitale meter, kwartierwaarden).
+                    Uw verbruik verschijnt als blauwe lijn op de grafiek samen met de energiekost per uur.
                 </p>
-                <button class="px-4 py-2 rounded-xl bg-accent text-sm font-medium text-accent-foreground" disabled>
-                    Verbinden met Fluvius
-                </button>
+
+                {#if meterStore.dateCount > 0 && meterStore.dateRange}
+                    <div class="rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-3 flex items-center justify-between gap-3">
+                        <div>
+                            <p class="text-xs font-medium text-blue-700 dark:text-blue-300">
+                                {meterStore.dateCount} dag{meterStore.dateCount !== 1 ? 'en' : ''} geladen
+                            </p>
+                            <p class="text-xs text-blue-600/70 dark:text-blue-400/70 mt-0.5">
+                                {formatDate(meterStore.dateRange.from)} – {formatDate(meterStore.dateRange.to)}
+                            </p>
+                        </div>
+                        <button
+                            onclick={() => { meterStore.clear(); uploadStatus = 'idle'; }}
+                            class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors"
+                        >
+                            <Trash2 size={12} />
+                            Wissen
+                        </button>
+                    </div>
+                {/if}
+
+                <label class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-muted hover:border-primary/50 hover:bg-accent/50 transition-colors cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
+                    <Upload size={16} />
+                    {meterStore.dateCount > 0 ? 'Meer data importeren' : 'CSV-bestand kiezen'}
+                    <input
+                        type="file"
+                        accept=".csv,.txt,text/plain,text/csv"
+                        class="hidden"
+                        onchange={handleFileUpload}
+                    />
+                </label>
+
+                {#if uploadStatus === 'success'}
+                    <p class="text-xs text-green-600 dark:text-green-400">✓ {uploadMsg}</p>
+                {:else if uploadStatus === 'error'}
+                    <p class="text-xs text-destructive">{uploadMsg}</p>
+                {/if}
             </div>
         </section>
 

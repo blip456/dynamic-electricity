@@ -1,16 +1,18 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import type { HourlyPrice, Thresholds } from '$lib/types.js';
+    import type { HourlyPrice, HourlyMeterData, Thresholds } from '$lib/types.js';
     import { getAlertLevel, formatEuroPrice } from '$lib/priceUtils.js';
 
     let {
         prices,
         thresholds,
+        meterData = [],
         currentHour = -1,
         containerClass = 'h-64'
     }: {
         prices: HourlyPrice[];
         thresholds: Thresholds;
+        meterData?: HourlyMeterData[];
         currentHour?: number;
         containerClass?: string;
     } = $props();
@@ -18,14 +20,11 @@
     let canvas: HTMLCanvasElement;
     let chart: import('chart.js').Chart | null = null;
 
-    // hoveredBar: follows finger/mouse during slide; clears on lift
-    // pinnedBar:  persists after a tap; tap same bar to clear
-    // suppressHoverUntil: timestamp until which onHover is ignored (suppresses
-    //   the synthetic mousemove Chrome fires after touchend in DevTools/browsers)
-    let hoveredBar          = -1;
-    let pinnedBar           = -1;
-    let suppressHoverUntil  = 0;
-    let selectedPrice       = $state<HourlyPrice | null>(null);
+    let hoveredBar    = -1;
+    let pinnedBar     = -1;
+    let touchBarCount = 0;
+    let firstTouchBar = -1;
+    let selectedPrice = $state<HourlyPrice | null>(null);
 
     const COLORS: Record<string, string> = {
         green: 'rgba(34, 197, 94, 0.80)',
@@ -33,14 +32,12 @@
         amber: 'rgba(245, 158, 11, 0.80)',
         red:   'rgba(239, 68, 68, 0.80)'
     };
-
     const COLORS_DIM: Record<string, string> = {
         green: 'rgba(34, 197, 94, 0.18)',
         blue:  'rgba(59, 130, 246, 0.18)',
         amber: 'rgba(245, 158, 11, 0.18)',
         red:   'rgba(239, 68, 68, 0.18)'
     };
-
     const COLORS_FULL: Record<string, string> = {
         green: 'rgba(34, 197, 94, 1)',
         blue:  'rgba(59, 130, 246, 1)',
@@ -50,6 +47,15 @@
 
     function sorted() {
         return [...prices].sort((a, b) => a.hour - b.hour);
+    }
+
+    // Consumption line aligned with the sorted price bars (null = no data)
+    function consumptionLine(): (number | null)[] {
+        const rows = sorted();
+        return rows.map((p) => {
+            const m = meterData.find((d) => d.hour === p.hour);
+            return m ? m.consumptionKwh : null;
+        });
     }
 
     function buildDataset() {
@@ -65,13 +71,11 @@
             if (hasSelection) return i === active ? COLORS_FULL[level] : COLORS_DIM[level];
             return i === currentHour ? COLORS_FULL[level] : COLORS[level];
         });
-
         const borderColors = rows.map((_, i) => {
             if (hasSelection && i === active) return 'rgba(255,255,255,0.85)';
             if (!hasSelection && i === currentHour) return 'rgba(59,130,246,1)';
             return 'transparent';
         });
-
         const borderWidths = rows.map((_, i) => {
             if (hasSelection && i === active) return 2.5;
             if (!hasSelection && i === currentHour) return 2;
@@ -85,10 +89,19 @@
         if (!chart) return;
         const { data, labels, bgColors, borderColors, borderWidths } = buildDataset();
         chart.data.labels = labels;
+
+        // Dataset 0 — price bars
         chart.data.datasets[0].data            = data;
-        chart.data.datasets[0].backgroundColor = bgColors;
-        chart.data.datasets[0].borderColor     = borderColors;
-        chart.data.datasets[0].borderWidth     = borderWidths;
+        (chart.data.datasets[0] as any).backgroundColor = bgColors;
+        (chart.data.datasets[0] as any).borderColor     = borderColors;
+        (chart.data.datasets[0] as any).borderWidth     = borderWidths;
+
+        // Dataset 1 — consumption line
+        const lineData = consumptionLine();
+        chart.data.datasets[1].data = lineData;
+        const hasLine = lineData.some((v) => v !== null);
+        (chart.options.scales as any).y2.display = hasLine;
+
         chart.update('none');
     }
 
@@ -98,24 +111,53 @@
     }
 
     async function createChart() {
-        const { Chart, BarController, BarElement, CategoryScale, LinearScale } =
-            await import('chart.js');
-        Chart.register(BarController, BarElement, CategoryScale, LinearScale);
+        const {
+            Chart, BarController, BarElement,
+            LineController, LineElement, PointElement,
+            CategoryScale, LinearScale, Filler
+        } = await import('chart.js');
+        Chart.register(
+            BarController, BarElement,
+            LineController, LineElement, PointElement,
+            CategoryScale, LinearScale, Filler
+        );
 
         const { data, labels, bgColors, borderColors, borderWidths } = buildDataset();
+        const lineData = consumptionLine();
+        const hasLine  = lineData.some((v) => v !== null);
 
         chart = new Chart(canvas, {
-            type: 'bar',
             data: {
                 labels,
-                datasets: [{
-                    data,
-                    backgroundColor: bgColors,
-                    borderColor:     borderColors,
-                    borderWidth:     borderWidths,
-                    borderRadius:    5,
-                    borderSkipped:   false
-                }]
+                datasets: [
+                    // Price bars
+                    {
+                        type: 'bar',
+                        data,
+                        backgroundColor: bgColors,
+                        borderColor:     borderColors,
+                        borderWidth:     borderWidths,
+                        borderRadius:    5,
+                        borderSkipped:   false,
+                        yAxisID:         'y',
+                        order:           2
+                    },
+                    // Consumption line
+                    {
+                        type:            'line',
+                        data:            lineData,
+                        yAxisID:         'y2',
+                        borderColor:     'rgba(59, 130, 246, 0.85)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                        borderWidth:     2,
+                        pointRadius:     0,
+                        pointHoverRadius: 4,
+                        tension:         0.35,
+                        fill:            true,
+                        spanGaps:        false,
+                        order:           1
+                    }
+                ]
             },
             options: {
                 responsive:          true,
@@ -123,8 +165,15 @@
                 animation:           { duration: 300 },
                 interaction: { mode: 'index', intersect: false },
                 onHover: (_, elements) => {
-                    if (Date.now() < suppressHoverUntil) return;
-                    const idx = elements.length > 0 ? elements[0].index : -1;
+                    // Only count bar elements (dataset index 0) for tap detection
+                    const barEls = elements.filter((e) => e.datasetIndex === 0);
+                    const idx    = barEls.length > 0 ? barEls[0].index : -1;
+
+                    if (idx >= 0) {
+                        if (touchBarCount === 0) { firstTouchBar = idx; touchBarCount = 1; }
+                        else if (idx !== hoveredBar) touchBarCount++;
+                    }
+
                     if (idx !== hoveredBar) {
                         hoveredBar = idx;
                         syncPrice();
@@ -152,6 +201,17 @@
                             font:     { size: 11 },
                             color:    '#94a3b8'
                         }
+                    },
+                    y2: {
+                        type:     'linear',
+                        position: 'right',
+                        display:  hasLine,
+                        grid:     { display: false },
+                        ticks: {
+                            callback: (v) => `${Number(v).toFixed(1)} kWh`,
+                            font:     { size: 10 },
+                            color:    'rgba(59, 130, 246, 0.7)'
+                        }
                     }
                 },
                 plugins: {
@@ -165,106 +225,42 @@
     onMount(() => {
         createChart();
 
-        // Detect which bar index sits under a touch/click point using Chart.js hit detection.
-        function getBarAtPoint(x: number, y: number): number {
-            if (!chart) return -1;
-            // Chart.js reads .native to decide whether to use e.x/e.y directly.
-            const fakeEvent = { native: true, x, y } as unknown as Event;
-            const hits = chart.getElementsAtEventForMode(fakeEvent, 'index', { intersect: false }, false);
-            return hits.length > 0 ? hits[0].index : -1;
+        function onTouchStart() {
+            touchBarCount = 0;
+            firstTouchBar = -1;
         }
-
-        // Touch handling: detect tapped bar at touchstart so we don't depend on
-        // onHover (which fires from touchmove and is never called on a still tap).
-        let touchStartBar = -1;
-        let touchStartX   = 0;
-        let touchStartY   = 0;
-        let touchMoved    = false;
-
-        function onTouchStart(e: TouchEvent) {
-            if (e.touches.length !== 1) return;
-            const t = e.touches[0];
-            const rect = canvas.getBoundingClientRect();
-            touchStartX   = t.clientX - rect.left;
-            touchStartY   = t.clientY - rect.top;
-            touchMoved    = false;
-            touchStartBar = getBarAtPoint(touchStartX, touchStartY);
-        }
-
-        function onTouchMove(e: TouchEvent) {
-            if (e.touches.length !== 1) return;
-            const t = e.touches[0];
-            const rect = canvas.getBoundingClientRect();
-            const dx = (t.clientX - rect.left) - touchStartX;
-            const dy = (t.clientY - rect.top)  - touchStartY;
-            if (Math.abs(dx) > 8 || Math.abs(dy) > 8) touchMoved = true;
-        }
-
         function onTouchEnd() {
-            // Always clear hoveredBar on lift and suppress the synthetic mousemove
-            // that browsers/DevTools fire after touchend (which would re-set hoveredBar).
-            hoveredBar = -1;
-            suppressHoverUntil = Date.now() + 600;
-
-            if (touchMoved) { syncPrice(); updateChart(); return; }
-            if (touchStartBar < 0) {
-                // tapped canvas but missed all bars → clear pin
-                pinnedBar = -1;
-                syncPrice();
-                updateChart();
-                return;
-            }
-            // same bar toggles off, different bar pins the new one
-            pinnedBar = touchStartBar === pinnedBar ? -1 : touchStartBar;
+            if (touchBarCount !== 1) return;
+            pinnedBar = pinnedBar >= 0 ? -1 : firstTouchBar;
             syncPrice();
             updateChart();
         }
-
-        // Clear pin when the user touches anywhere outside the canvas.
-        function onDocumentTouchStart(e: TouchEvent) {
-            if (pinnedBar < 0) return;
-            if (!canvas.contains(e.target as Node)) {
-                pinnedBar = -1;
-                syncPrice();
-                updateChart();
-            }
-        }
-
-        // Desktop: guard against the ghost click iOS fires ~300ms after touchend.
         let lastTouchEndMs = 0;
         function onTouchEndTime() { lastTouchEndMs = Date.now(); }
-
-        function onClick() {
+        function onClick(e: MouseEvent) {
             if (Date.now() - lastTouchEndMs < 500) return;
-            if (hoveredBar < 0) {
-                if (pinnedBar >= 0) { pinnedBar = -1; syncPrice(); updateChart(); }
-                return;
-            }
-            pinnedBar = hoveredBar === pinnedBar ? -1 : hoveredBar;
+            if (hoveredBar < 0) return;
+            pinnedBar = pinnedBar >= 0 ? -1 : hoveredBar;
             syncPrice();
             updateChart();
         }
 
-        canvas.addEventListener('touchstart', onTouchStart,           { passive: true });
-        canvas.addEventListener('touchmove',  onTouchMove,            { passive: true });
-        canvas.addEventListener('touchend',   onTouchEnd,             { passive: true });
-        canvas.addEventListener('touchend',   onTouchEndTime,         { passive: true });
+        canvas.addEventListener('touchstart', onTouchStart,   { passive: true });
+        canvas.addEventListener('touchend',   onTouchEnd,     { passive: true });
+        canvas.addEventListener('touchend',   onTouchEndTime, { passive: true });
         canvas.addEventListener('click',      onClick);
-        document.addEventListener('touchstart', onDocumentTouchStart, { passive: true });
 
         return () => {
             canvas.removeEventListener('touchstart', onTouchStart);
-            canvas.removeEventListener('touchmove',  onTouchMove);
             canvas.removeEventListener('touchend',   onTouchEnd);
             canvas.removeEventListener('touchend',   onTouchEndTime);
             canvas.removeEventListener('click',      onClick);
-            document.removeEventListener('touchstart', onDocumentTouchStart);
             chart?.destroy();
         };
     });
 
     $effect(() => {
-        prices; thresholds; currentHour;
+        prices; thresholds; currentHour; meterData;
         if (chart) {
             hoveredBar    = -1;
             pinnedBar     = -1;
@@ -272,6 +268,16 @@
             updateChart();
         }
     });
+
+    // Cost for selected hour (energy cost only, excl. fixed network/tax costs)
+    const activeMeter = $derived(
+        selectedPrice ? meterData.find((d) => d.hour === selectedPrice!.hour) ?? null : null
+    );
+    const netCostEur = $derived(
+        activeMeter && selectedPrice
+            ? ((activeMeter.consumptionKwh - activeMeter.injectionKwh) * selectedPrice.centPerKwh) / 100
+            : null
+    );
 </script>
 
 <div class="flex flex-col {containerClass} w-full">
@@ -279,15 +285,30 @@
         <canvas bind:this={canvas}></canvas>
     </div>
 
-    <!-- Touch info strip -->
-    <div class="h-8 flex-shrink-0 flex items-center justify-center gap-3 text-sm select-none">
+    <!-- Info strip -->
+    <div class="h-10 flex-shrink-0 flex items-center justify-center gap-3 text-sm select-none">
         {#if selectedPrice}
-            <span class="text-muted-foreground tabular-nums">
-                {String(selectedPrice.hour).padStart(2, '0')}:00–{String(selectedPrice.hour + 1).padStart(2, '0')}:00
+            <span class="text-muted-foreground tabular-nums text-xs">
+                {String(selectedPrice.hour).padStart(2, '0')}:00–{String(selectedPrice.hour + 1).padStart(2, '00')}:00
             </span>
             <span class="font-semibold tabular-nums">
                 {formatEuroPrice(selectedPrice.centPerKwh)}/kWh
             </span>
+            {#if activeMeter}
+                <span class="text-muted-foreground tabular-nums text-xs">
+                    ↓ {activeMeter.consumptionKwh.toFixed(3)} kWh
+                </span>
+                {#if activeMeter.injectionKwh > 0}
+                    <span class="text-muted-foreground tabular-nums text-xs">
+                        ↑ {activeMeter.injectionKwh.toFixed(3)} kWh
+                    </span>
+                {/if}
+                {#if netCostEur !== null}
+                    <span class="font-medium tabular-nums text-xs {netCostEur < 0 ? 'text-green-500' : 'text-foreground'}">
+                        {netCostEur < 0 ? '−' : ''}€{Math.abs(netCostEur).toFixed(4)}
+                    </span>
+                {/if}
+            {/if}
         {:else}
             <span class="text-muted-foreground/40 text-xs">← sleep voor details →</span>
         {/if}

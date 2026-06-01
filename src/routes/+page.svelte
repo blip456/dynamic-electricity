@@ -6,6 +6,7 @@
     import CurrentPriceCard from '$lib/components/CurrentPriceCard.svelte';
     import AlertBadge from '$lib/components/AlertBadge.svelte';
     import { settings } from '$lib/stores.svelte.js';
+    import { meterStore } from '$lib/meterStore.svelte.js';
     import {
         getTodayBelgian,
         getTomorrowBelgian,
@@ -278,6 +279,7 @@
                     <PriceChart
                         prices={data.prices}
                         thresholds={settings.thresholds}
+                        meterData={meterStore.forDate(data.date)}
                         currentHour={isToday ? currentHour : -1}
                     />
                 {/if}
