@@ -226,14 +226,14 @@
                         </div>
                         <div class="flex items-center gap-1">
                             <button
-                                onclick={() => { settings.green = clamp(settings.green - 5, -100, settings.amber - 1); settings.save(); }}
+                                onclick={() => { settings.green = clamp(settings.green - 1, -100, settings.amber - 1); settings.save(); }}
                                 class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
                             >−</button>
                             <span class="text-sm font-mono w-24 text-center tabular-nums">
                                 ≤ {formatEuroPrice(settings.green)}
                             </span>
                             <button
-                                onclick={() => { settings.green = clamp(settings.green + 5, -100, settings.amber - 1); settings.save(); }}
+                                onclick={() => { settings.green = clamp(settings.green + 1, -100, settings.amber - 1); settings.save(); }}
                                 class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
                             >+</button>
                         </div>
@@ -252,14 +252,14 @@
                         </div>
                         <div class="flex items-center gap-1">
                             <button
-                                onclick={() => { settings.amber = clamp(settings.amber - 5, settings.green + 1, settings.blue - 1); settings.save(); }}
+                                onclick={() => { settings.amber = clamp(settings.amber - 1, settings.green + 1, settings.blue - 1); settings.save(); }}
                                 class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
                             >−</button>
                             <span class="text-sm font-mono w-24 text-center tabular-nums">
                                 ≤ {formatEuroPrice(settings.amber)}
                             </span>
                             <button
-                                onclick={() => { settings.amber = clamp(settings.amber + 5, settings.green + 1, settings.blue - 1); settings.save(); }}
+                                onclick={() => { settings.amber = clamp(settings.amber + 1, settings.green + 1, settings.blue - 1); settings.save(); }}
                                 class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
                             >+</button>
                         </div>
@@ -278,14 +278,14 @@
                         </div>
                         <div class="flex items-center gap-1">
                             <button
-                                onclick={() => { settings.blue = clamp(settings.blue - 5, settings.amber + 1, 200); settings.save(); }}
+                                onclick={() => { settings.blue = clamp(settings.blue - 1, settings.amber + 1, 200); settings.save(); }}
                                 class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
                             >−</button>
                             <span class="text-sm font-mono w-24 text-center tabular-nums">
                                 ≤ {formatEuroPrice(settings.blue)}
                             </span>
                             <button
-                                onclick={() => { settings.blue = clamp(settings.blue + 5, settings.amber + 1, 200); settings.save(); }}
+                                onclick={() => { settings.blue = clamp(settings.blue + 1, settings.amber + 1, 200); settings.save(); }}
                                 class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
                             >+</button>
                         </div>
