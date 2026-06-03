@@ -122,11 +122,28 @@
             CategoryScale, LinearScale, Filler
         );
 
+        // Align y2 zero (0 kWh) with y zero (0 €/kWh).
+        // When prices dip below zero the left axis shifts its baseline upward;
+        // this plugin adjusts y2.min to a phantom negative so the two zeros
+        // stay on the same pixel row. Negative ticks on y2 are suppressed.
+        const alignZeroPlugin = {
+            id: 'alignZero',
+            afterDataLimits(chart: any, args: any) {
+                if (args.scale.id !== 'y2' || !args.scale.display) return;
+                const y = chart.scales['y'];
+                if (!y || y.min >= 0) return;
+                const zeroFrac = -y.min / (y.max - y.min);
+                const y2Max = args.scale.max;
+                if (y2Max > 0) args.scale.min = -(y2Max * zeroFrac) / (1 - zeroFrac);
+            }
+        };
+
         const { data, labels, bgColors, borderColors, borderWidths } = buildDataset();
         const lineData = consumptionLine();
         const hasLine  = lineData.some((v) => v !== null);
 
         chart = new Chart(canvas, {
+            plugins: [alignZeroPlugin],
             data: {
                 labels,
                 datasets: [
@@ -208,7 +225,8 @@
                         display:  hasLine,
                         grid:     { display: false },
                         ticks: {
-                            callback: (v) => `${Number(v).toFixed(1)} kWh`,
+                            // suppress phantom negative ticks used only for alignment
+                            callback: (v) => Number(v) >= 0 ? `${Number(v).toFixed(1)} kWh` : '',
                             font:     { size: 10 },
                             color:    'rgba(59, 130, 246, 0.7)'
                         }
