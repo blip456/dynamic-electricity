@@ -49,12 +49,24 @@
         return [...prices].sort((a, b) => a.hour - b.hour);
     }
 
-    // Consumption line aligned with the sorted price bars (null = no data)
+    // kWh consumption line aligned with sorted price bars (right axis, null = no data)
     function consumptionLine(): (number | null)[] {
         const rows = sorted();
         return rows.map((p) => {
             const m = meterData.find((d) => d.hour === p.hour);
             return m ? m.consumptionKwh : null;
+        });
+    }
+
+    // Hourly cost line: netKwh × centPerKwh — plots on left axis in the same
+    // internal "cents" unit, so the existing €-formatter shows correct euro totals.
+    function costLine(): (number | null)[] {
+        const rows = sorted();
+        return rows.map((p) => {
+            const m = meterData.find((d) => d.hour === p.hour);
+            if (!m) return null;
+            const netKwh = m.consumptionKwh - m.injectionKwh;
+            return netKwh * p.centPerKwh;
         });
     }
 
@@ -96,11 +108,14 @@
         (chart.data.datasets[0] as any).borderColor     = borderColors;
         (chart.data.datasets[0] as any).borderWidth     = borderWidths;
 
-        // Dataset 1 — consumption line
+        // Dataset 1 — kWh consumption line (right axis)
         const lineData = consumptionLine();
         chart.data.datasets[1].data = lineData;
         const hasLine = lineData.some((v) => v !== null);
         (chart.options.scales as any).y2.display = hasLine;
+
+        // Dataset 2 — hourly cost line (left axis, green)
+        chart.data.datasets[2].data = costLine();
 
         chart.update('none');
     }
@@ -147,7 +162,7 @@
             data: {
                 labels,
                 datasets: [
-                    // Price bars
+                    // Dataset 0 — price bars
                     {
                         type: 'bar',
                         data,
@@ -159,7 +174,7 @@
                         yAxisID:         'y',
                         order:           2
                     },
-                    // Consumption line
+                    // Dataset 1 — kWh consumption line (right axis, blue)
                     {
                         type:            'line',
                         data:            lineData,
@@ -173,6 +188,21 @@
                         fill:            true,
                         spanGaps:        false,
                         order:           1
+                    },
+                    // Dataset 2 — hourly cost line (left axis, green)
+                    {
+                        type:            'line',
+                        data:            costLine(),
+                        yAxisID:         'y',
+                        borderColor:     'rgba(34, 197, 94, 0.9)',
+                        backgroundColor: 'transparent',
+                        borderWidth:     2,
+                        pointRadius:     0,
+                        pointHoverRadius: 4,
+                        tension:         0.35,
+                        fill:            false,
+                        spanGaps:        false,
+                        order:           0
                     }
                 ]
             },
