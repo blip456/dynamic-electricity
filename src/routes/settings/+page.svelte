@@ -92,7 +92,13 @@
             }
             meterStore.merge(result.data);
             uploadStatus = 'success';
-            uploadMsg    = `${result.daysFound} dag${result.daysFound !== 1 ? 'en' : ''} geïmporteerd (${result.rowsRead} metingen).`;
+            const range  = result.dateFrom && result.dateTo
+                ? ` (${formatDate(result.dateFrom)} – ${formatDate(result.dateTo)})`
+                : '';
+            const skipped = result.daysSkipped > 0
+                ? `, ${result.daysSkipped} dag${result.daysSkipped !== 1 ? 'en' : ''} zonder metingen overgeslagen`
+                : '';
+            uploadMsg = `${result.daysFound} dag${result.daysFound !== 1 ? 'en' : ''} geïmporteerd${range}${skipped}.`;
         } catch {
             uploadStatus = 'error';
             uploadMsg    = 'Bestand kon niet worden verwerkt.';
@@ -132,13 +138,13 @@
 
             <div class="p-4 flex flex-col gap-4">
                 {#if permissionState === 'denied'}
-                    <div class="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-700">
+                    <div class="rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-sm text-amber-700 dark:text-amber-300">
                         Meldingen zijn geblokkeerd in je browser. Sta ze toe via iPhone-instellingen → Safari → Meldingen.
                     </div>
                 {/if}
 
                 {#if !browser || !('PushManager' in window)}
-                    <div class="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-700">
+                    <div class="rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-sm text-amber-700 dark:text-amber-300">
                         Meldingen vereisen dat je de app toevoegt aan je beginscherm (iOS 16.4+).
                     </div>
                 {/if}
