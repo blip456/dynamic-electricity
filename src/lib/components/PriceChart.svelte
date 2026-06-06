@@ -22,8 +22,8 @@
 
     let hoveredBar    = -1;
     let pinnedBar     = -1;
-    let touchBarCount = 0;
-    let firstTouchBar = -1;
+    let touchStartBar = -1; // bar index captured at touchstart (reliable on iOS)
+    let movedToNewBar = false; // true when finger crosses to a different bar = slide
     let selectedPrice = $state<HourlyPrice | null>(null);
 
     const COLORS: Record<string, string> = {
@@ -212,13 +212,12 @@
                 animation:           { duration: 300 },
                 interaction: { mode: 'index', intersect: false },
                 onHover: (_, elements) => {
-                    // Only count bar elements (dataset index 0) for tap detection
                     const barEls = elements.filter((e) => e.datasetIndex === 0);
                     const idx    = barEls.length > 0 ? barEls[0].index : -1;
 
-                    if (idx >= 0) {
-                        if (touchBarCount === 0) { firstTouchBar = idx; touchBarCount = 1; }
-                        else if (idx !== hoveredBar) touchBarCount++;
+                    // Detect slide: finger moved to a bar different from where touch started
+                    if (idx >= 0 && touchStartBar >= 0 && idx !== touchStartBar) {
+                        movedToNewBar = true;
                     }
 
                     if (idx !== hoveredBar) {
@@ -273,20 +272,24 @@
     onMount(() => {
         createChart();
 
-        function onTouchStart() {
-            touchBarCount = 0;
-            firstTouchBar = -1;
+        function onTouchStart(e: TouchEvent) {
+            touchStartBar = -1;
+            movedToNewBar = false;
+            if (!chart || e.touches.length !== 1) return;
+            // Detect the bar at the exact moment the finger goes down.
+            // This is reliable on iOS even for stationary taps that never fire touchmove.
+            const els = chart.getElementsAtEventForMode(
+                e as unknown as Event, 'index', { intersect: false }, false
+            );
+            const bar = els.find((el) => el.datasetIndex === 0);
+            touchStartBar = bar ? bar.index : -1;
         }
         function onTouchEnd() {
-            if (touchBarCount > 1) return;              // slide gesture, not a tap
-            // touchBarCount === 1: a bar was hovered during the tap → toggle it.
-            // touchBarCount === 0: a stationary re-tap (no hover fired) or a tap on
-            //   empty canvas area → clear any pinned bar. This is what makes tapping
-            //   an already-selected bar reliably deselect it on iOS.
-            if (touchBarCount === 1) {
-                pinnedBar = pinnedBar === firstTouchBar ? -1 : firstTouchBar;
+            if (movedToNewBar) return; // slide gesture — leave hover display as-is
+            if (touchStartBar >= 0) {
+                pinnedBar = pinnedBar === touchStartBar ? -1 : touchStartBar;
             } else {
-                pinnedBar = -1;
+                pinnedBar = -1; // tapped on empty area → deselect
             }
             syncPrice();
             updateChart();
