@@ -1,5 +1,7 @@
 import type { HourlyMeterData } from './types.js';
 
+export type FluviusFileType = 'kwartiertotalen' | 'dagtotalen' | 'unknown';
+
 export interface ParseResult {
     data: Record<string, HourlyMeterData[]>; // keyed by YYYY-MM-DD
     rowsRead: number;
@@ -7,6 +9,7 @@ export interface ParseResult {
     daysSkipped: number; // days present in file but with no valid readings (e.g. "Geen verbruik")
     dateFrom: string | null; // earliest YYYY-MM-DD with data
     dateTo: string | null;   // latest YYYY-MM-DD with data
+    fileType: FluviusFileType;
 }
 
 /**
@@ -24,6 +27,19 @@ export function parseFluviusCsv(text: string): ParseResult {
     // Auto-detect separator from header line
     const sep = lines[0].includes('\t') ? '\t' : ';';
     const dataLines = lines.slice(1); // skip header
+
+    // Detect file type by comparing From date (col 0) and To date (col 2) on first data row.
+    // kwartiertotalen: same date, 15-min apart. dagtotalen: to-date is the next calendar day.
+    let fileType: FluviusFileType = 'unknown';
+    const firstCols = dataLines[0]?.split(sep);
+    if (firstCols && firstCols.length >= 4) {
+        fileType = firstCols[0].trim() === firstCols[2].trim() ? 'kwartiertotalen' : 'dagtotalen';
+    }
+
+    // Dagtotalen files have no hourly breakdown — reject early with a clear signal.
+    if (fileType === 'dagtotalen') {
+        return { data: {}, rowsRead: 0, daysFound: 0, daysSkipped: 0, dateFrom: null, dateTo: null, fileType };
+    }
 
     // Track dates that appear in the file (for skipped-day count)
     const seenDates = new Set<string>();
@@ -94,5 +110,6 @@ export function parseFluviusCsv(text: string): ParseResult {
         daysSkipped,
         dateFrom: sortedDates[0] ?? null,
         dateTo:   sortedDates[sortedDates.length - 1] ?? null,
+        fileType,
     };
 }

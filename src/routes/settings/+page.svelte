@@ -85,6 +85,11 @@
         try {
             const text   = await file.text();
             const result = parseFluviusCsv(text);
+            if (result.fileType === 'dagtotalen') {
+                uploadStatus = 'error';
+                uploadMsg    = 'Dit is een dagtotalen-bestand. Onze app heeft kwartiertotalen nodig voor uurlijkse grafieken. Exporteer opnieuw via Mijn Fluvius en kies "kwartiertotalen".';
+                return;
+            }
             if (result.daysFound === 0) {
                 uploadStatus = 'error';
                 uploadMsg    = 'Geen geldige Fluvius-data gevonden in het bestand.';
