@@ -278,17 +278,34 @@
             firstTouchBar = -1;
         }
         function onTouchEnd() {
-            if (touchBarCount !== 1) return;
-            pinnedBar = pinnedBar >= 0 ? -1 : firstTouchBar;
+            if (touchBarCount > 1) return;              // slide gesture, not a tap
+            // touchBarCount === 1: a bar was hovered during the tap → toggle it.
+            // touchBarCount === 0: a stationary re-tap (no hover fired) or a tap on
+            //   empty canvas area → clear any pinned bar. This is what makes tapping
+            //   an already-selected bar reliably deselect it on iOS.
+            if (touchBarCount === 1) {
+                pinnedBar = pinnedBar === firstTouchBar ? -1 : firstTouchBar;
+            } else {
+                pinnedBar = -1;
+            }
             syncPrice();
             updateChart();
         }
         let lastTouchEndMs = 0;
         function onTouchEndTime() { lastTouchEndMs = Date.now(); }
-        function onClick(e: MouseEvent) {
-            if (Date.now() - lastTouchEndMs < 500) return;
-            if (hoveredBar < 0) return;
-            pinnedBar = pinnedBar >= 0 ? -1 : hoveredBar;
+        function onClick() {
+            if (Date.now() - lastTouchEndMs < 500) return; // ignore ghost click after touch
+            // Clicking a bar toggles it; clicking empty canvas area clears the pin.
+            pinnedBar = hoveredBar >= 0 && pinnedBar !== hoveredBar ? hoveredBar : -1;
+            syncPrice();
+            updateChart();
+        }
+
+        // Tapping/clicking anywhere outside the chart canvas clears the pinned bar.
+        function onOutsidePointerDown(e: PointerEvent) {
+            if (pinnedBar < 0) return;
+            if (e.target instanceof Node && canvas.contains(e.target)) return;
+            pinnedBar = -1;
             syncPrice();
             updateChart();
         }
@@ -297,12 +314,14 @@
         canvas.addEventListener('touchend',   onTouchEnd,     { passive: true });
         canvas.addEventListener('touchend',   onTouchEndTime, { passive: true });
         canvas.addEventListener('click',      onClick);
+        document.addEventListener('pointerdown', onOutsidePointerDown);
 
         return () => {
             canvas.removeEventListener('touchstart', onTouchStart);
             canvas.removeEventListener('touchend',   onTouchEnd);
             canvas.removeEventListener('touchend',   onTouchEndTime);
             canvas.removeEventListener('click',      onClick);
+            document.removeEventListener('pointerdown', onOutsidePointerDown);
             chart?.destroy();
         };
     });
