@@ -276,13 +276,20 @@
             touchStartBar = -1;
             movedToNewBar = false;
             if (!chart || e.touches.length !== 1) return;
-            // Detect the bar at the exact moment the finger goes down.
-            // This is reliable on iOS even for stationary taps that never fire touchmove.
-            const els = chart.getElementsAtEventForMode(
-                e as unknown as Event, 'index', { intersect: false }, false
+            // Compute bar index from touch X using chart plot-area bounds.
+            // chart.chartArea and getBoundingClientRect() are both in CSS pixels,
+            // so no device-pixel-ratio correction is needed.
+            const touch = e.touches[0];
+            const rect  = canvas.getBoundingClientRect();
+            const x     = touch.clientX - rect.left;
+            const area  = (chart as any).chartArea as { left: number; right: number };
+            if (!area || x < area.left || x > area.right) return;
+            const n = sorted().length;
+            if (n === 0) return;
+            touchStartBar = Math.min(
+                Math.floor(((x - area.left) / (area.right - area.left)) * n),
+                n - 1
             );
-            const bar = els.find((el) => el.datasetIndex === 0);
-            touchStartBar = bar ? bar.index : -1;
         }
         function onTouchEnd() {
             if (movedToNewBar) return; // slide gesture — leave hover display as-is
