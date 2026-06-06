@@ -328,18 +328,18 @@
                 </p>
 
                 {#if meterStore.dateCount > 0 && meterStore.dateRange}
-                    <div class="rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-700 p-3 flex items-center justify-between gap-3">
+                    <div class="rounded-xl bg-blue-50 border border-blue-200 p-3 flex items-center justify-between gap-3">
                         <div>
-                            <p class="text-xs font-medium text-blue-700 dark:text-blue-200">
+                            <p class="text-xs font-medium text-blue-700">
                                 {meterStore.dateCount} dag{meterStore.dateCount !== 1 ? 'en' : ''} geladen
                             </p>
-                            <p class="text-xs text-blue-600/70 dark:text-blue-300 mt-0.5">
+                            <p class="text-xs text-blue-600/70 mt-0.5">
                                 {formatDate(meterStore.dateRange.from)} – {formatDate(meterStore.dateRange.to)}
                             </p>
                         </div>
                         <button
                             onclick={() => { meterStore.clear(); uploadStatus = 'idle'; }}
-                            class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-800/60 transition-colors"
+                            class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
                         >
                             <Trash2 size={12} />
                             Wissen
