@@ -40,7 +40,12 @@ export const GET: RequestHandler = async ({ url }) => {
     const prices: Record<string, HourlyPrice[]> = {};
     dates.forEach((d, i) => { if (results[i].length > 0) prices[d] = results[i]; });
 
+    // Ranges that end before today are immutable — cache them for a week.
+    const cacheControl = to < today
+        ? 'public, s-maxage=604800, stale-while-revalidate=86400'
+        : 'public, s-maxage=3600, stale-while-revalidate=600';
+
     return json({ prices }, {
-        headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=600' }
+        headers: { 'Cache-Control': cacheControl }
     });
 };

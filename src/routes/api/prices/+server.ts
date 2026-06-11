@@ -15,32 +15,27 @@ export const GET: RequestHandler = async ({ url }) => {
 
     const thresholds = DEFAULT_THRESHOLDS;
 
+    // Day-ahead prices for past dates never change — let Vercel's edge cache
+    // hold them for a week so history browsing rarely hits the upstream APIs.
+    // Today/tomorrow stay on a short TTL (tomorrow's prices appear ~13:00 CET).
+    const isPast = date < getTodayBelgian();
+    const cacheControl = isPast
+        ? 'public, s-maxage=604800, stale-while-revalidate=86400'
+        : 'public, s-maxage=3600, stale-while-revalidate=600';
+
+    const respond = (prices: Awaited<ReturnType<typeof fetchFromEneco>>) =>
+        json({ date, prices }, { headers: { 'Cache-Control': cacheControl } });
+
     // 1. Try Eneco BE Dynamic Pricing API (primary source)
     try {
-        const prices = await fetchFromEneco(date, thresholds);
-        return json(
-            { date, prices },
-            {
-                headers: {
-                    'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=600'
-                }
-            }
-        );
+        return respond(await fetchFromEneco(date, thresholds));
     } catch (enecoErr) {
         console.warn('Eneco fetch failed, trying APX:', enecoErr);
     }
 
     // 2. Try APX Group REST API (fallback)
     try {
-        const prices = await fetchFromApx(date, thresholds);
-        return json(
-            { date, prices },
-            {
-                headers: {
-                    'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=600'
-                }
-            }
-        );
+        return respond(await fetchFromApx(date, thresholds));
     } catch (apxErr) {
         console.warn('APX fetch failed, trying ENTSO-E:', apxErr);
     }
@@ -49,15 +44,7 @@ export const GET: RequestHandler = async ({ url }) => {
     const entsoeKey = env.ENTSOE_API_KEY;
     if (entsoeKey) {
         try {
-            const prices = await fetchFromEntsoe(date, entsoeKey, thresholds);
-            return json(
-                { date, prices },
-                {
-                    headers: {
-                        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=600'
-                    }
-                }
-            );
+            return respond(await fetchFromEntsoe(date, entsoeKey, thresholds));
         } catch (entsoeErr) {
             console.error('ENTSO-E fetch failed:', entsoeErr);
         }

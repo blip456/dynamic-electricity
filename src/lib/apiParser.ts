@@ -24,9 +24,7 @@ export async function fetchFromEneco(
         aggregation: 'hourly'
     });
 
-    const res = await fetch(`${ENECO_URL}?${params}`, {
-        next: { revalidate: 3600 }
-    } as RequestInit);
+    const res = await fetch(`${ENECO_URL}?${params}`);
     if (!res.ok) throw new Error(`Eneco HTTP ${res.status}`);
 
     const body = await res.json();
@@ -62,7 +60,7 @@ export async function fetchFromApx(
     dateStr: string,
     thresholds: Thresholds = DEFAULT_THRESHOLDS
 ): Promise<HourlyPrice[]> {
-    const res = await fetch(APX_URL, { next: { revalidate: 3600 } } as RequestInit);
+    const res = await fetch(APX_URL);
     if (!res.ok) throw new Error(`APX HTTP ${res.status}`);
     const data = await res.json();
 
@@ -123,7 +121,7 @@ export async function fetchFromEntsoe(
         periodEnd: formatEntsoePeriod(end)
     });
 
-    const res = await fetch(`${ENTSOE_URL}?${params}`, { next: { revalidate: 3600 } } as RequestInit);
+    const res = await fetch(`${ENTSOE_URL}?${params}`);
     if (!res.ok) {
         const body = await res.text();
         throw new Error(`ENTSO-E HTTP ${res.status}: ${body.slice(0, 200)}`);
