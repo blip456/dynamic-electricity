@@ -57,18 +57,6 @@
         });
     }
 
-    // Hourly cost line: netKwh × centPerKwh — plots on left axis in the same
-    // internal "cents" unit, so the existing €-formatter shows correct euro totals.
-    function costLine(): (number | null)[] {
-        const rows = sorted();
-        return rows.map((p) => {
-            const m = meterData.find((d) => d.hour === p.hour);
-            if (!m) return null;
-            const netKwh = m.consumptionKwh - m.injectionKwh;
-            return netKwh * p.centPerKwh;
-        });
-    }
-
     function buildDataset() {
         const rows   = sorted();
         const data   = rows.map((p) => p.centPerKwh);
@@ -112,9 +100,6 @@
         chart.data.datasets[1].data = lineData;
         const hasLine = lineData.some((v) => v !== null);
         (chart.options.scales as any).y2.display = hasLine;
-
-        // Dataset 2 — hourly cost line (left axis, green)
-        chart.data.datasets[2].data = costLine();
 
         chart.update('none');
     }
@@ -187,21 +172,6 @@
                         fill:            true,
                         spanGaps:        false,
                         order:           1
-                    },
-                    // Dataset 2 — hourly cost line (left axis, green)
-                    {
-                        type:            'line',
-                        data:            costLine(),
-                        yAxisID:         'y',
-                        borderColor:     'rgba(34, 197, 94, 0.9)',
-                        backgroundColor: 'transparent',
-                        borderWidth:     2,
-                        pointRadius:     0,
-                        pointHoverRadius: 4,
-                        tension:         0.35,
-                        fill:            false,
-                        spanGaps:        false,
-                        order:           0
                     }
                 ]
             },
