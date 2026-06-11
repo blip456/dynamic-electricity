@@ -22,7 +22,7 @@ export function parseFluviusCsv(text: string): ParseResult {
     // Strip UTF-8 BOM if present
     const cleaned = text.startsWith('﻿') ? text.slice(1) : text;
     const lines = cleaned.split(/\r?\n/).filter((l) => l.trim());
-    if (lines.length < 2) return { data: {}, rowsRead: 0, daysFound: 0, daysSkipped: 0, dateFrom: null, dateTo: null };
+    if (lines.length < 2) return { data: {}, rowsRead: 0, daysFound: 0, daysSkipped: 0, dateFrom: null, dateTo: null, fileType: 'unknown' };
 
     // Auto-detect separator from header line
     const sep = lines[0].includes('\t') ? '\t' : ';';

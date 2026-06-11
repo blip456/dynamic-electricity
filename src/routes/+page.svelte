@@ -23,6 +23,9 @@
 
     // Optimistic navigation: localDate updates immediately on click;
     // isNavigating shows a spinner until SvelteKit delivers new data.
+    // The initial-value capture is intentional — the $effect below re-syncs
+    // localDate whenever data.date changes.
+    // svelte-ignore state_referenced_locally
     let localDate    = $state(data.date);
     let isNavigating = $state(false);
 
