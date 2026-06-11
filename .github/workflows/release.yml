@@ -6,6 +6,11 @@ on:
       - main
       - dev
 
+# Never run two releases at once — overlapping semantic-release runs can
+# both push a version-bump commit and race on the same tag.
+concurrency:
+  group: release-${{ github.ref }}
+
 permissions:
   contents: write       # push version-bump commit + tag
   issues: write         # link issues in release notes
@@ -29,6 +34,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Type check
+        run: npm run check
 
       - name: Release
         env:
