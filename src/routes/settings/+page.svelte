@@ -371,9 +371,15 @@
             <p class="text-xs text-center text-muted-foreground">
                 Prijsbron: EPEX Spot Belgium (Belpex). Prijzen in €/kWh (euro per kilowattuur), exclusief vaste kosten.
             </p>
-            <p class="text-xs text-center text-muted-foreground/60 font-mono">
+            <a
+                href="/changelog"
+                class="text-xs text-center text-muted-foreground/60 font-mono hover:text-foreground transition-colors underline-offset-2 hover:underline"
+            >
                 v{__APP_VERSION__} · build {__APP_BUILD__}
-            </p>
+            </a>
+            <a href="/changelog" class="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                Wat is er nieuw →
+            </a>
         </div>
 
     </div>

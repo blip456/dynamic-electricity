@@ -48,14 +48,23 @@ Common scopes in this repo: `chart`, `api`, `parser`, `settings`, `push`,
 
 Bypass in an emergency with `git commit --no-verify` / `git push --no-verify`.
 
-## Cutting a release
+## Cutting a release / deploying
 
-Releases are local — run them from an up-to-date `dev` on your own machine:
+**Versioning rule: every release is a minor bump** (`0.1.0 → 0.2.0 → 0.3.0`),
+regardless of commit types — commit types still determine how entries are
+grouped in the changelog. Releases are local; run them from an up-to-date
+`dev` on your own machine:
+
+```bash
+npm run deploy         # release + push in one go — the standard way to ship
+```
+
+or step by step:
 
 ```bash
 npm run release:dry    # preview: version bump + changelog, changes nothing
-npm run release:beta   # prerelease: 0.1.1-beta.0, -beta.1, …
-npm run release        # stable:     0.1.1
+npm run release:beta   # prerelease of the next minor: 0.2.0-beta.0, -beta.1, …
+npm run release        # next minor: 0.2.0
 git push --follow-tags origin dev
 ```
 
@@ -65,9 +74,10 @@ bumps `package.json`/`package-lock.json`, prepends the release notes to
 
 The push triggers a Vercel deployment of the release commit, which bakes the
 new version into the app — it appears in the settings-page footer as
-`v0.1.1 · build <sha>`. `CHANGELOG.md` is the release-notes record (GitHub's
+`v0.2.0 · build <sha>`, and the full `CHANGELOG.md` is rendered in-app at
+`/changelog` ("Wat is er nieuw", linked from the settings footer). GitHub's
 Releases page isn't used, since publishing there would require CI or manual
-steps).
+steps.
 
 ## Vercel (Hobby plan) notes
 

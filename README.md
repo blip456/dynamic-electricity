@@ -53,7 +53,8 @@ npm run dev
 | `npm run preview` | Preview the production build                   |
 | `npm run check`   | `svelte-check` type checking (also runs pre-push) |
 | `npm run icons`   | Regenerate PWA icons from `static/icons/icon.svg` |
-| `npm run release` | Cut a release locally (`release:beta` for prereleases, `release:dry` to preview) |
+| `npm run deploy`  | Release (minor bump + changelog + tag) and push → Vercel deploys |
+| `npm run release` | Release without pushing (`release:beta` for prereleases, `release:dry` to preview) |
 
 ### Environment variables
 
@@ -106,11 +107,11 @@ with [semantic versioning](https://semver.org), designed to run entirely on
 
 - Commit messages are enforced locally by git hooks (husky + commitlint);
   `pre-push` runs the type check.
-- Releases are cut locally with `npm run release` (or `release:beta`),
-  which bumps `package.json`, updates `CHANGELOG.md`, commits and tags —
-  all derived from the commit messages since the last release.
-- Pushing the release commit makes Vercel deploy it, and the version
-  (e.g. `0.1.1-beta.0`) shows up in the settings-page footer.
+- Ship with `npm run deploy`: every release bumps the **minor** version,
+  updates `CHANGELOG.md` from the commit messages since the last release,
+  commits, tags, and pushes — which triggers the Vercel deployment.
+- The deployed version (e.g. `v0.2.0`) shows in the settings-page footer,
+  and the changelog is readable in-app at `/changelog`.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow and
 commit-message examples.
