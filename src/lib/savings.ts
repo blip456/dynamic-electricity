@@ -87,6 +87,7 @@ export interface PeriodSavings {
     actualCost: number;
     refCost: number;
     savings: number;
+    consumptionCost: number;  // € consumption only — base for shift-potential %
     paidAvgCent: number;      // consumption-weighted
     marketAvgCent: number;    // plain average over the days
     shiftPotential: number;
@@ -120,6 +121,7 @@ export function aggregateSavings(days: DaySavings[]): PeriodSavings | null {
         actualCost,
         refCost,
         savings: refCost - actualCost,
+        consumptionCost,
         paidAvgCent: consumption > 0 ? (consumptionCost / consumption) * 100 : 0,
         marketAvgCent: marketSum / days.length,
         shiftPotential,

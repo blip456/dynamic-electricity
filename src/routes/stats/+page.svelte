@@ -141,6 +141,12 @@
             ? ((periodStats.paidAvgCent - periodStats.marketAvgCent) / Math.abs(periodStats.marketAvgCent)) * 100
             : 0
     );
+    // Shift potential as share of what consumption actually cost
+    const shiftPct = $derived(
+        periodStats && periodStats.consumptionCost > 0
+            ? (Math.max(0, periodStats.shiftPotential) / periodStats.consumptionCost) * 100
+            : 0
+    );
 
     // ── Savings trend: week-over-week / month-over-month ─────────────────────
     let trendMode = $state<'week' | 'maand'>('week');
@@ -417,10 +423,15 @@
 
                     <div>
                         <p class="text-xs text-muted-foreground">Verschuifpotentieel</p>
-                        <p class="font-bold text-xl tabular-nums mt-0.5">{fmtEur(Math.max(0, periodStats.shiftPotential))}</p>
+                        <p class="font-bold text-xl tabular-nums mt-0.5">
+                            {fmtEur(Math.max(0, periodStats.shiftPotential))}
+                            {#if periodStats.shiftPotential > 0.005}
+                                <span class="text-sm font-semibold text-muted-foreground">· −{shiftPct.toFixed(0)}%</span>
+                            {/if}
+                        </p>
                         <p class="text-xs text-muted-foreground mt-0.5">
                             {#if periodStats.shiftPotential > 0.005}
-                                extra besparing als je verbruik in de 8 goedkoopste uren per dag was gevallen
+                                je verbruikskost kon {shiftPct.toFixed(0)}% lager als je verbruik in de 8 goedkoopste uren per dag was gevallen
                             {:else}
                                 je verbruik viel al vrijwel optimaal — knap getimed
                             {/if}
