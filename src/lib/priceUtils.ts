@@ -41,6 +41,44 @@ export function isTomorrowAvailable(): boolean {
     return getCurrentBelgianHour() >= 14;
 }
 
+export interface CheapestWindow {
+    startHour: number;     // inclusive
+    endHour: number;       // exclusive
+    avgCentPerKwh: number;
+}
+
+/**
+ * Find the cheapest contiguous block of `durationHours` within a day,
+ * considering only windows starting at or after `fromHour` (e.g. the current
+ * hour, so "run the dishwasher now or later" advice never points backwards).
+ * Windows with missing hours are skipped. Returns null when no complete
+ * window fits.
+ */
+export function findCheapestWindow(
+    prices: HourlyPrice[],
+    durationHours: number,
+    fromHour = 0
+): CheapestWindow | null {
+    const byHour = new Map(prices.map((p) => [p.hour, p.centPerKwh]));
+    let best: CheapestWindow | null = null;
+
+    for (let start = fromHour; start + durationHours <= 24; start++) {
+        let sum = 0;
+        let complete = true;
+        for (let h = start; h < start + durationHours; h++) {
+            const cent = byHour.get(h);
+            if (cent === undefined) { complete = false; break; }
+            sum += cent;
+        }
+        if (!complete) continue;
+        const avg = sum / durationHours;
+        if (!best || avg < best.avgCentPerKwh) {
+            best = { startHour: start, endHour: start + durationHours, avgCentPerKwh: avg };
+        }
+    }
+    return best;
+}
+
 export function formatBelgianDate(dateStr: string): string {
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(year, month - 1, day);

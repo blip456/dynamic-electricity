@@ -9,6 +9,7 @@ class Settings {
     amber = $state(DEFAULT_THRESHOLDS.amber);
     blue = $state(DEFAULT_THRESHOLDS.blue);
     notificationsEnabled = $state(false);
+    windowHours = $state(3); // cheapest-window planner block duration (1–4)
 
     load() {
         if (!browser) return;
@@ -21,6 +22,8 @@ class Settings {
             if (typeof data.blue === 'number') this.blue = data.blue;
             if (typeof data.notificationsEnabled === 'boolean')
                 this.notificationsEnabled = data.notificationsEnabled;
+            if (typeof data.windowHours === 'number' && data.windowHours >= 1 && data.windowHours <= 4)
+                this.windowHours = data.windowHours;
         } catch {}
     }
 
@@ -32,7 +35,8 @@ class Settings {
                 green: this.green,
                 amber: this.amber,
                 blue: this.blue,
-                notificationsEnabled: this.notificationsEnabled
+                notificationsEnabled: this.notificationsEnabled,
+                windowHours: this.windowHours
             })
         );
     }

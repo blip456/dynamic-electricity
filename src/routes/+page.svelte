@@ -1,9 +1,10 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
-    import { Settings, Maximize2, X, RotateCcw } from '@lucide/svelte';
+    import { Settings, Maximize2, X, RotateCcw, CalendarDays } from '@lucide/svelte';
     import PriceChart from '$lib/components/PriceChart.svelte';
     import CurrentPriceCard from '$lib/components/CurrentPriceCard.svelte';
+    import CheapestWindowCard from '$lib/components/CheapestWindowCard.svelte';
     import AlertBadge from '$lib/components/AlertBadge.svelte';
     import { settings } from '$lib/stores.svelte.js';
     import { meterStore } from '$lib/meterStore.svelte.js';
@@ -331,13 +332,22 @@
                 </div>
                 <span class="font-semibold text-lg text-foreground">Stroom</span>
             </div>
-            <a
-                href="/settings"
-                class="p-2 rounded-xl hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
-                aria-label="Instellingen"
-            >
-                <Settings size={20} />
-            </a>
+            <div class="flex items-center gap-1">
+                <a
+                    href="/week"
+                    class="p-2 rounded-xl hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                    aria-label="Weekoverzicht"
+                >
+                    <CalendarDays size={20} />
+                </a>
+                <a
+                    href="/settings"
+                    class="p-2 rounded-xl hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                    aria-label="Instellingen"
+                >
+                    <Settings size={20} />
+                </a>
+            </div>
         </div>
 
         <!-- Current price card (today only, not while navigating) -->
@@ -418,6 +428,16 @@
                 {/if}
             </div>
         </div>
+
+        <!-- Cheapest-window planner -->
+        {#if !isNavigating && !data.error && data.prices.length > 0}
+            <CheapestWindowCard
+                prices={data.prices}
+                thresholds={settings.thresholds}
+                fromHour={isToday ? currentHour : 0}
+                {isToday}
+            />
+        {/if}
 
         <!-- Legend -->
         <div class="flex flex-wrap gap-2">
