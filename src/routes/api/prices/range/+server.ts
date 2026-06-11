@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { fetchFromEneco, fetchFromApx, fetchFromEntsoe } from '$lib/apiParser.js';
-import { DEFAULT_THRESHOLDS, getTodayBelgian } from '$lib/priceUtils.js';
+import { DEFAULT_THRESHOLDS, getTodayBelgian, getTomorrowBelgian } from '$lib/priceUtils.js';
 import { env } from '$env/dynamic/private';
 import type { HourlyPrice } from '$lib/types.js';
 
@@ -25,13 +25,16 @@ export const GET: RequestHandler = async ({ url }) => {
     const today   = getTodayBelgian();
     const entsoeKey = env.ENTSOE_API_KEY;
 
-    // Collect dates in range, capped at today and max 31 days
+    // Collect dates in range, capped at tomorrow (day-ahead prices publish
+    // around 13:00 CET; before that, tomorrow simply returns no data) and
+    // max 31 days.
+    const tomorrow = getTomorrowBelgian();
     const dates: string[] = [];
     const cursor = new Date(from + 'T00:00:00Z');
     const end    = new Date(to   + 'T00:00:00Z');
     while (cursor <= end && dates.length < 31) {
         const iso = cursor.toISOString().slice(0, 10);
-        if (iso <= today) dates.push(iso);
+        if (iso <= tomorrow) dates.push(iso);
         cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
 
