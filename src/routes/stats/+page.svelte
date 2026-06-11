@@ -405,7 +405,7 @@
 
                     <div class="flex items-center justify-between gap-3">
                         <div>
-                            <p class="text-xs text-muted-foreground">Jouw gem. prijs vs. marktgemiddelde</p>
+                            <p class="text-xs text-muted-foreground">Jouw gem. prijs vs. gemiddelde uurprijs</p>
                             <p class="font-semibold tabular-nums text-sm mt-0.5">
                                 {formatEuroPrice(periodStats.paidAvgCent)} vs {formatEuroPrice(periodStats.marketAvgCent)}
                             </p>
