@@ -123,12 +123,15 @@
 
         // Align y2 zero (0 kWh) with y zero (0 €/kWh).
         // When prices dip below zero the left axis shifts its baseline upward;
-        // this plugin adjusts y2.min to a phantom negative so the two zeros
-        // stay on the same pixel row. Negative ticks on y2 are suppressed.
+        // this hook extends y2.min to a phantom negative so the two zeros stay
+        // on the same pixel row. It runs afterBuildTicks (not afterDataLimits)
+        // because tick generation re-rounds min/max afterwards, which would
+        // break exact alignment — at this point y is final and y2's ticks
+        // (all ≥ 0) keep their nice spacing while min is extended downward.
         const alignZeroPlugin = {
             id: 'alignZero',
-            afterDataLimits(chart: any, args: any) {
-                if (args.scale.id !== 'y2' || !args.scale.display) return;
+            afterBuildTicks(chart: any, args: any) {
+                if (args.scale.id !== 'y2' || !args.scale.options.display) return;
                 const y = chart.scales['y'];
                 if (!y || y.min >= 0) return;
                 const zeroFrac = -y.min / (y.max - y.min);
@@ -218,8 +221,7 @@
                         display:  hasLine,
                         grid:     { display: false },
                         ticks: {
-                            // suppress phantom negative ticks used only for alignment
-                            callback: (v) => Number(v) >= 0 ? `${Number(v).toFixed(1)} kWh` : '',
+                            callback: (v) => `${Number(v).toFixed(1)} kWh`,
                             font:     { size: 10 },
                             color:    'rgba(59, 130, 246, 0.7)'
                         }
