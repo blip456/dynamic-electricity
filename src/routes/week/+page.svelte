@@ -5,6 +5,7 @@
     import { settings } from '$lib/stores.svelte.js';
     import {
         getAlertLevel,
+        getAlertLegendLabel,
         getTodayBelgian,
         getCurrentBelgianHour,
         formatEuroPrice
@@ -173,12 +174,11 @@
             </div>
         </div>
 
-        <!-- Legend -->
+        <!-- Legend (boundaries follow the user's thresholds) -->
         <div class="flex flex-wrap gap-2">
-            <AlertBadge level="green" label="Verdien geld" />
-            <AlertBadge level="blue" label="Onder nul" />
-            <AlertBadge level="amber" label="Goedkoop" />
-            <AlertBadge level="red" label="Duur" />
+            {#each (['green', 'blue', 'amber', 'red'] as const) as level}
+                <AlertBadge {level} label={getAlertLegendLabel(level, settings.thresholds)} />
+            {/each}
         </div>
     </div>
 </div>

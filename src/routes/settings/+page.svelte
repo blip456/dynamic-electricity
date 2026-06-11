@@ -5,7 +5,7 @@
     import { meterStore } from '$lib/meterStore.svelte.js';
     import { parseFluviusCsv } from '$lib/fluviusParser.js';
     import { subscribeToPush, unsubscribeFromPush, getNotificationPermission } from '$lib/notifications.js';
-    import { formatEuroPrice } from '$lib/priceUtils.js';
+    import { formatEuroPrice, ALERT_NAMES } from '$lib/priceUtils.js';
 
     let { data } = $props();
 
@@ -158,7 +158,7 @@
                     <div>
                         <p class="text-sm font-medium text-foreground">Prijswaarschuwingen</p>
                         <p class="text-xs text-muted-foreground mt-0.5">
-                            Ontvang meldingen bij groene (verdien geld), blauwe (onder nul) en rode (dure) prijzen, ook als de app gesloten is.
+                            Ontvang meldingen bij groene (verdien geld), blauwe (bijna gratis) en rode (dure) prijzen, ook als de app gesloten is.
                         </p>
                     </div>
                     <button
@@ -233,7 +233,7 @@
                     <div class="flex items-center justify-between mb-2">
                         <div class="text-sm font-medium text-foreground flex items-center gap-1.5">
                             <span class="w-2 h-2 rounded-full bg-green-500"></span>
-                            Groen — verdien geld
+                            Groen — {ALERT_NAMES.green.toLowerCase()}
                         </div>
                         <div class="flex items-center gap-1">
                             <button
@@ -259,7 +259,7 @@
                     <div class="flex items-center justify-between mb-2">
                         <div class="text-sm font-medium text-foreground flex items-center gap-1.5">
                             <span class="w-2 h-2 rounded-full bg-blue-500"></span>
-                            Blauw — onder nul
+                            Blauw — {ALERT_NAMES.blue.toLowerCase()}
                         </div>
                         <div class="flex items-center gap-1">
                             <button
@@ -275,7 +275,7 @@
                             >+</button>
                         </div>
                     </div>
-                    <p class="text-xs text-muted-foreground">Prijs is negatief maar nog niet genoeg om geld te verdienen.</p>
+                    <p class="text-xs text-muted-foreground">Prijs is (bijna) gratis, maar nog niet negatief genoeg om geld te verdienen.</p>
                 </div>
 
                 <div class="border-t"></div>
@@ -285,7 +285,7 @@
                     <div class="flex items-center justify-between mb-2">
                         <div class="text-sm font-medium text-foreground flex items-center gap-1.5">
                             <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-                            Oranje — goedkoop
+                            Oranje — {ALERT_NAMES.amber.toLowerCase()}
                         </div>
                         <div class="flex items-center gap-1">
                             <button

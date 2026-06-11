@@ -1,7 +1,7 @@
 <script lang="ts">
     import type { HourlyPrice, Thresholds } from '$lib/types.js';
     import AlertBadge from './AlertBadge.svelte';
-    import { getCurrentBelgianHour, formatEuroPrice, getAlertLevel } from '$lib/priceUtils.js';
+    import { getCurrentBelgianHour, formatEuroPrice, getAlertLevel, ALERT_NAMES } from '$lib/priceUtils.js';
 
     let { price, thresholds }: { price: HourlyPrice; thresholds: Thresholds } = $props();
 
@@ -42,11 +42,6 @@
             </p>
         </div>
 
-        <AlertBadge level={alertLevel} label={{
-            green: 'Verdien geld!',
-            blue: 'Onder nul',
-            amber: 'Goedkoop',
-            red: 'Duur!'
-        }[alertLevel]} />
+        <AlertBadge level={alertLevel} label={ALERT_NAMES[alertLevel]} />
     </div>
 </div>

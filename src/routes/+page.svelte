@@ -13,7 +13,8 @@
         getTomorrowBelgian,
         getCurrentBelgianHour,
         formatBelgianDate,
-        formatEuroPrice
+        formatEuroPrice,
+        getAlertLegendLabel
     } from '$lib/priceUtils.js';
 
     let { data } = $props();
@@ -439,12 +440,11 @@
             />
         {/if}
 
-        <!-- Legend -->
+        <!-- Legend (boundaries follow the user's thresholds) -->
         <div class="flex flex-wrap gap-2">
-            <AlertBadge level="green" label="Verdien geld (< €−0,2000)" />
-            <AlertBadge level="blue" label="Onder nul" />
-            <AlertBadge level="amber" label="Goedkoop (≤ €0,1500)" />
-            <AlertBadge level="red" label="Duur (> €0,1500)" />
+            {#each (['green', 'blue', 'amber', 'red'] as const) as level}
+                <AlertBadge {level} label={getAlertLegendLabel(level, settings.thresholds)} />
+            {/each}
         </div>
 
         <!-- Period overview (shown only when any meter data is present) -->

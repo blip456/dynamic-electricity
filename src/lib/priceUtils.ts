@@ -10,6 +10,36 @@ export function formatEuroPrice(centPerKwh: number): string {
     return '€' + (centPerKwh / 100).toFixed(4).replace('.', ',');
 }
 
+// Compact 2-decimal variant for legends and labels
+export function formatEuroPriceShort(centPerKwh: number): string {
+    return '€' + (centPerKwh / 100).toFixed(2).replace('.', ',');
+}
+
+// Display names for the four price categories — single source of truth for
+// the legends, the current-price badge, and the settings page.
+export const ALERT_NAMES: Record<AlertLevel, string> = {
+    green: 'Verdien geld',
+    blue:  'Bijna gratis',
+    amber: 'Goedkoop',
+    red:   'Duur'
+};
+
+/**
+ * Legend label with the user's actual threshold boundary,
+ * e.g. "Goedkoop (≤ €0,15)". Note the Thresholds field names predate the
+ * current colour mapping: field `amber` bounds the blue level and field
+ * `blue` bounds the amber level (see getAlertLevel).
+ */
+export function getAlertLegendLabel(level: AlertLevel, thresholds: Thresholds): string {
+    const bounds: Record<AlertLevel, string> = {
+        green: `≤ ${formatEuroPriceShort(thresholds.green)}`,
+        blue:  `≤ ${formatEuroPriceShort(thresholds.amber)}`,
+        amber: `≤ ${formatEuroPriceShort(thresholds.blue)}`,
+        red:   `> ${formatEuroPriceShort(thresholds.blue)}`
+    };
+    return `${ALERT_NAMES[level]} (${bounds[level]})`;
+}
+
 export function getAlertLevel(centPerKwh: number, thresholds: Thresholds): AlertLevel {
     if (centPerKwh <= thresholds.green) return 'green'; // making money
     if (centPerKwh <= thresholds.amber) return 'blue';  // below zero
@@ -94,7 +124,7 @@ export function getPushPayload(price: HourlyPrice): PushPayload {
             body: `Prijs nu ${formatEuroPrice(price.centPerKwh)}/kWh — u verdient geld bij stroomverbruik!`
         },
         blue: {
-            title: '🔵 Stroomprijs onder nul',
+            title: '🔵 Stroom bijna gratis',
             body: `Prijs nu ${formatEuroPrice(price.centPerKwh)}/kWh — bijna gratis stroom!`
         },
         amber: {
