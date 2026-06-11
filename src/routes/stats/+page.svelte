@@ -81,17 +81,18 @@
         return Object.values(dayStats).filter((d) => d.date >= from && d.date <= to);
     }
 
-    // ── Period overview (anchored on today) ──────────────────────────────────
+    // ── Period overview (navigable day / week / month) ───────────────────────
     type Period = 'dag' | 'week' | 'maand';
     let overviewPeriod = $state<Period>('week');
+    let anchorDate     = $state(today);
 
     const periodRange = $derived.by((): { from: string; to: string } => {
-        if (overviewPeriod === 'dag') return { from: today, to: today };
+        if (overviewPeriod === 'dag') return { from: anchorDate, to: anchorDate };
         if (overviewPeriod === 'week') {
-            const mon = mondayOf(today);
+            const mon = mondayOf(anchorDate);
             return { from: mon, to: isoOffset(mon, 6) };
         }
-        const [y, m] = today.split('-').map(Number);
+        const [y, m] = anchorDate.split('-').map(Number);
         const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
         return { from: `${y}-${pad(m)}-01`, to: `${y}-${pad(m)}-${pad(last)}` };
     });
@@ -100,10 +101,33 @@
         const { from, to } = periodRange;
         const [fy, fm, fd] = from.split('-').map(Number);
         const [, tm, td]   = to.split('-').map(Number);
-        if (overviewPeriod === 'dag')   return `${fd} ${MONTHS_NL[fm - 1]}`;
+        const yearSuffix   = fy !== Number(today.slice(0, 4)) ? ` ${fy}` : '';
+        if (overviewPeriod === 'dag')   return `${fd} ${MONTHS_NL[fm - 1]}${yearSuffix}`;
         if (overviewPeriod === 'maand') return `${MONTHS_NL[fm - 1]} ${fy}`;
-        return fm === tm ? `${fd}–${td} ${MONTHS_NL[fm - 1]}` : `${fd} ${MONTHS_NL[fm - 1]} – ${td} ${MONTHS_NL[tm - 1]}`;
+        const base = fm === tm ? `${fd}–${td} ${MONTHS_NL[fm - 1]}` : `${fd} ${MONTHS_NL[fm - 1]} – ${td} ${MONTHS_NL[tm - 1]}`;
+        return base + yearSuffix;
     });
+
+    const isCurrentPeriod = $derived(periodRange.from <= today && today <= periodRange.to);
+    const canGoBack       = $derived(periodRange.from > cutoff);
+    const canGoForward    = $derived(periodRange.to < today);
+
+    function shiftPeriod(dir: -1 | 1) {
+        if (overviewPeriod === 'dag') {
+            anchorDate = isoOffset(anchorDate, dir);
+        } else if (overviewPeriod === 'week') {
+            anchorDate = isoOffset(anchorDate, dir * 7);
+        } else {
+            const [y, m] = anchorDate.split('-').map(Number);
+            const dt = new Date(Date.UTC(y, m - 1 + dir, 1));
+            anchorDate = `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-01`;
+        }
+    }
+
+    function pickAnchor(e: Event) {
+        const value = (e.currentTarget as HTMLInputElement).value;
+        if (value) anchorDate = value;
+    }
 
     const periodStats = $derived(aggregateSavings(statsInRange(periodRange.from, periodRange.to)));
 
@@ -175,6 +199,12 @@
     let heatSelected = $state<string | null>(null);
     const heatSelectedStats = $derived(heatSelected ? dayStats[heatSelected] ?? null : null);
 
+    function shortDate(date: string): string {
+        const [y, m, d] = date.split('-').map(Number);
+        const yearSuffix = y !== Number(today.slice(0, 4)) ? ` ${y}` : '';
+        return `${d} ${MONTHS_NL[m - 1]}${yearSuffix}`;
+    }
+
     function heatLabel(date: string): string {
         const [, m, d] = date.split('-').map(Number);
         const dow = DAYS_NL[(new Date(date + 'T00:00:00Z').getUTCDay() + 6) % 7];
@@ -224,9 +254,20 @@
             </div>
         {:else}
 
+            <!-- Data coverage -->
+            {#if meterStore.dateRange}
+                <p class="text-xs text-muted-foreground -mt-2">
+                    {meterStore.dateCount} {meterStore.dateCount === 1 ? 'dag' : 'dagen'} aan verbruiksdata
+                    · {shortDate(meterStore.dateRange.from)} – {shortDate(meterStore.dateRange.to)}
+                    {#if analysisDates.length < meterStore.dateCount}
+                        · statistieken over de laatste 26 weken ({analysisDates.length} dagen)
+                    {/if}
+                </p>
+            {/if}
+
             <!-- ── Period overview (dag/week/maand) ─────────────────────── -->
             <div class="bg-card rounded-2xl border shadow-sm overflow-hidden">
-                <div class="flex items-center justify-between px-4 py-3 border-b">
+                <div class="flex items-center justify-between gap-2 flex-wrap px-4 py-3 border-b">
                     <div class="flex gap-1">
                         {#each (['dag', 'week', 'maand'] as const) as p}
                             <button
@@ -238,7 +279,49 @@
                             >{p}</button>
                         {/each}
                     </div>
-                    <span class="text-xs text-muted-foreground">{periodLabel}</span>
+
+                    <div class="flex items-center gap-1">
+                        {#if !isCurrentPeriod}
+                            <button
+                                onclick={() => anchorDate = today}
+                                class="text-xs font-medium px-2 py-1 rounded-lg bg-accent text-accent-foreground hover:bg-border transition-colors"
+                            >
+                                Nu
+                            </button>
+                        {/if}
+                        <button
+                            onclick={() => shiftPeriod(-1)}
+                            disabled={!canGoBack}
+                            class="p-1.5 rounded-lg hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-muted-foreground hover:text-foreground"
+                            aria-label="Vorige {overviewPeriod}"
+                        >
+                            <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 stroke-current fill-none" stroke-width="2">
+                                <polyline points="15 18 9 12 15 6" />
+                            </svg>
+                        </button>
+                        <span class="relative text-xs text-muted-foreground tabular-nums">
+                            {periodLabel}
+                            <input
+                                type="date"
+                                value={anchorDate}
+                                min={cutoff}
+                                max={today}
+                                onchange={pickAnchor}
+                                aria-label="Kies een datum"
+                                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            />
+                        </span>
+                        <button
+                            onclick={() => shiftPeriod(1)}
+                            disabled={!canGoForward}
+                            class="p-1.5 rounded-lg hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-muted-foreground hover:text-foreground"
+                            aria-label="Volgende {overviewPeriod}"
+                        >
+                            <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 stroke-current fill-none" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
                 {#if isLoadingPrices && !periodStats}
