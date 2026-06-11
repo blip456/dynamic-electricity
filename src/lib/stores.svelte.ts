@@ -1,13 +1,13 @@
 import { browser } from '$app/environment';
-import { DEFAULT_THRESHOLDS } from './priceUtils.js';
+import { DEFAULT_THRESHOLDS, normalizeThresholds } from './priceUtils.js';
 import type { Thresholds } from './types.js';
 
 const STORAGE_KEY = 'ew-settings';
 
 class Settings {
-    green = $state(DEFAULT_THRESHOLDS.green);
-    amber = $state(DEFAULT_THRESHOLDS.amber);
-    blue = $state(DEFAULT_THRESHOLDS.blue);
+    earn = $state(DEFAULT_THRESHOLDS.earn);
+    nearFree = $state(DEFAULT_THRESHOLDS.nearFree);
+    cheap = $state(DEFAULT_THRESHOLDS.cheap);
     notificationsEnabled = $state(false);
     windowHours = $state(3); // cheapest-window planner block duration (1–4)
 
@@ -17,9 +17,15 @@ class Settings {
             const raw = localStorage.getItem(STORAGE_KEY);
             if (!raw) return;
             const data = JSON.parse(raw);
-            if (typeof data.green === 'number') this.green = data.green;
-            if (typeof data.amber === 'number') this.amber = data.amber;
-            if (typeof data.blue === 'number') this.blue = data.blue;
+
+            // Thresholds: accepts both the current shape and the legacy
+            // colour-named one ({green, amber, blue}); the next save()
+            // persists the current shape, completing the migration.
+            const t = normalizeThresholds(data);
+            this.earn = t.earn;
+            this.nearFree = t.nearFree;
+            this.cheap = t.cheap;
+
             if (typeof data.notificationsEnabled === 'boolean')
                 this.notificationsEnabled = data.notificationsEnabled;
             if (typeof data.windowHours === 'number' && data.windowHours >= 1 && data.windowHours <= 4)
@@ -32,9 +38,9 @@ class Settings {
         localStorage.setItem(
             STORAGE_KEY,
             JSON.stringify({
-                green: this.green,
-                amber: this.amber,
-                blue: this.blue,
+                earn: this.earn,
+                nearFree: this.nearFree,
+                cheap: this.cheap,
                 notificationsEnabled: this.notificationsEnabled,
                 windowHours: this.windowHours
             })
@@ -42,14 +48,14 @@ class Settings {
     }
 
     reset() {
-        this.green = DEFAULT_THRESHOLDS.green;
-        this.amber = DEFAULT_THRESHOLDS.amber;
-        this.blue = DEFAULT_THRESHOLDS.blue;
+        this.earn = DEFAULT_THRESHOLDS.earn;
+        this.nearFree = DEFAULT_THRESHOLDS.nearFree;
+        this.cheap = DEFAULT_THRESHOLDS.cheap;
         this.save();
     }
 
     get thresholds(): Thresholds {
-        return { green: this.green, amber: this.amber, blue: this.blue };
+        return { earn: this.earn, nearFree: this.nearFree, cheap: this.cheap };
     }
 }
 

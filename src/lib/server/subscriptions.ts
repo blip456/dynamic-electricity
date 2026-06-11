@@ -1,4 +1,5 @@
 import type { StoredSubscription, Thresholds } from '../types.js';
+import { normalizeThresholds } from '../priceUtils.js';
 
 // ---------------------------------------------------------------------------
 // In-memory fallback for local development (Vercel KV not available locally)
@@ -54,7 +55,12 @@ export async function getAllSubscriptions(): Promise<StoredSubscription[]> {
         const results = await Promise.all(ids.map((id) => kv.get<string>(`ew:sub:${id}`)));
         return results
             .filter((r): r is string => typeof r === 'string')
-            .map((r) => JSON.parse(r) as StoredSubscription);
+            .map((r) => {
+                const stored = JSON.parse(r) as StoredSubscription;
+                // Records saved before the thresholds rename carry the legacy
+                // {green, amber, blue} shape — normalize at read time.
+                return { ...stored, thresholds: normalizeThresholds(stored.thresholds) };
+            });
     }
     return [...devStore.values()];
 }

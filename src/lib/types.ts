@@ -9,10 +9,10 @@ export interface HourlyPrice {
 }
 
 export interface Thresholds {
-    green: number; // ≤ this → making money (green), default -20¢/kWh
-    amber: number; // ≤ this → below zero (blue),    default 0¢/kWh
-    blue: number;  // ≤ this → cheap (amber),         default 10¢/kWh
-    // above blue → expensive (red)
+    earn: number;     // ≤ this → green "verdien geld", default −20 ¢/kWh
+    nearFree: number; // ≤ this → blue "bijna gratis",  default 0 ¢/kWh
+    cheap: number;    // ≤ this → amber "goedkoop",     default 15 ¢/kWh
+    // above cheap → red "duur"
 }
 
 export interface PricesResponse {

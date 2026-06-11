@@ -1,6 +1,28 @@
 import type { AlertLevel, HourlyPrice, PushPayload, Thresholds } from './types.js';
 
-export const DEFAULT_THRESHOLDS: Thresholds = { green: -20, amber: 0, blue: 15 };
+export const DEFAULT_THRESHOLDS: Thresholds = { earn: -20, nearFree: 0, cheap: 15 };
+
+// Shape used before the thresholds were renamed: the fields were named after
+// colours, and confusingly `amber` bounded the blue level and `blue` the
+// amber level. Persisted data (localStorage, KV subscriptions) may still
+// carry this shape.
+interface LegacyThresholds {
+    green: number;
+    amber: number;
+    blue: number;
+}
+
+/** Accept current, legacy, or unknown threshold data and return the current shape. */
+export function normalizeThresholds(raw: unknown): Thresholds {
+    const r = raw as Partial<Thresholds & LegacyThresholds> | null | undefined;
+    if (r && typeof r.earn === 'number' && typeof r.nearFree === 'number' && typeof r.cheap === 'number') {
+        return { earn: r.earn, nearFree: r.nearFree, cheap: r.cheap };
+    }
+    if (r && typeof r.green === 'number' && typeof r.amber === 'number' && typeof r.blue === 'number') {
+        return { earn: r.green, nearFree: r.amber, cheap: r.blue };
+    }
+    return { ...DEFAULT_THRESHOLDS };
+}
 
 export function eurMWhToCentPerKwh(eurMWh: number): number {
     return eurMWh / 10;
@@ -26,25 +48,23 @@ export const ALERT_NAMES: Record<AlertLevel, string> = {
 
 /**
  * Legend label with the user's actual threshold boundary,
- * e.g. "Goedkoop (≤ €0,15)". Note the Thresholds field names predate the
- * current colour mapping: field `amber` bounds the blue level and field
- * `blue` bounds the amber level (see getAlertLevel).
+ * e.g. "Goedkoop (≤ €0,15)".
  */
 export function getAlertLegendLabel(level: AlertLevel, thresholds: Thresholds): string {
     const bounds: Record<AlertLevel, string> = {
-        green: `≤ ${formatEuroPriceShort(thresholds.green)}`,
-        blue:  `≤ ${formatEuroPriceShort(thresholds.amber)}`,
-        amber: `≤ ${formatEuroPriceShort(thresholds.blue)}`,
-        red:   `> ${formatEuroPriceShort(thresholds.blue)}`
+        green: `≤ ${formatEuroPriceShort(thresholds.earn)}`,
+        blue:  `≤ ${formatEuroPriceShort(thresholds.nearFree)}`,
+        amber: `≤ ${formatEuroPriceShort(thresholds.cheap)}`,
+        red:   `> ${formatEuroPriceShort(thresholds.cheap)}`
     };
     return `${ALERT_NAMES[level]} (${bounds[level]})`;
 }
 
 export function getAlertLevel(centPerKwh: number, thresholds: Thresholds): AlertLevel {
-    if (centPerKwh <= thresholds.green) return 'green'; // making money
-    if (centPerKwh <= thresholds.amber) return 'blue';  // below zero
-    if (centPerKwh <= thresholds.blue) return 'amber';  // cheap
-    return 'red';                                        // expensive
+    if (centPerKwh <= thresholds.earn) return 'green';     // making money
+    if (centPerKwh <= thresholds.nearFree) return 'blue';  // (nearly) free
+    if (centPerKwh <= thresholds.cheap) return 'amber';    // cheap
+    return 'red';                                          // expensive
 }
 
 export function getTodayBelgian(): string {

@@ -237,14 +237,14 @@
                         </div>
                         <div class="flex items-center gap-1">
                             <button
-                                onclick={() => { settings.green = clamp(settings.green - 1, -100, settings.amber - 1); settings.save(); }}
+                                onclick={() => { settings.earn = clamp(settings.earn - 1, -100, settings.nearFree - 1); settings.save(); }}
                                 class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
                             >−</button>
                             <span class="text-sm font-mono w-24 text-center tabular-nums">
-                                ≤ {formatEuroPrice(settings.green)}
+                                ≤ {formatEuroPrice(settings.earn)}
                             </span>
                             <button
-                                onclick={() => { settings.green = clamp(settings.green + 1, -100, settings.amber - 1); settings.save(); }}
+                                onclick={() => { settings.earn = clamp(settings.earn + 1, -100, settings.nearFree - 1); settings.save(); }}
                                 class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
                             >+</button>
                         </div>
@@ -263,14 +263,14 @@
                         </div>
                         <div class="flex items-center gap-1">
                             <button
-                                onclick={() => { settings.amber = clamp(settings.amber - 1, settings.green + 1, settings.blue - 1); settings.save(); }}
+                                onclick={() => { settings.nearFree = clamp(settings.nearFree - 1, settings.earn + 1, settings.cheap - 1); settings.save(); }}
                                 class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
                             >−</button>
                             <span class="text-sm font-mono w-24 text-center tabular-nums">
-                                ≤ {formatEuroPrice(settings.amber)}
+                                ≤ {formatEuroPrice(settings.nearFree)}
                             </span>
                             <button
-                                onclick={() => { settings.amber = clamp(settings.amber + 1, settings.green + 1, settings.blue - 1); settings.save(); }}
+                                onclick={() => { settings.nearFree = clamp(settings.nearFree + 1, settings.earn + 1, settings.cheap - 1); settings.save(); }}
                                 class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
                             >+</button>
                         </div>
@@ -289,14 +289,14 @@
                         </div>
                         <div class="flex items-center gap-1">
                             <button
-                                onclick={() => { settings.blue = clamp(settings.blue - 1, settings.amber + 1, 200); settings.save(); }}
+                                onclick={() => { settings.cheap = clamp(settings.cheap - 1, settings.nearFree + 1, 200); settings.save(); }}
                                 class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
                             >−</button>
                             <span class="text-sm font-mono w-24 text-center tabular-nums">
-                                ≤ {formatEuroPrice(settings.blue)}
+                                ≤ {formatEuroPrice(settings.cheap)}
                             </span>
                             <button
-                                onclick={() => { settings.blue = clamp(settings.blue + 1, settings.amber + 1, 200); settings.save(); }}
+                                onclick={() => { settings.cheap = clamp(settings.cheap + 1, settings.nearFree + 1, 200); settings.save(); }}
                                 class="w-7 h-7 rounded-lg bg-accent hover:bg-border flex items-center justify-center text-sm font-bold transition-colors"
                             >+</button>
                         </div>

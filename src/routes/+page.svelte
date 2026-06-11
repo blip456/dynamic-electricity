@@ -186,7 +186,7 @@
                 totalConsumption += m.consumptionKwh;
                 totalInjection   += m.injectionKwh;
                 const netKwh = m.consumptionKwh - m.injectionKwh;
-                goedkoopCost += (netKwh * settings.thresholds.blue) / 100;
+                goedkoopCost += (netKwh * settings.thresholds.cheap) / 100;
                 totalHours++;
 
                 const price = dayPrices.find((p) => p.hour === m.hour);
@@ -528,7 +528,7 @@
                             <p class="font-bold text-xl tabular-nums">
                                 {periodTotals.goedkoopCost < 0 ? '−' : ''}€{Math.abs(periodTotals.goedkoopCost).toFixed(2)}
                             </p>
-                            <p class="text-xs text-muted-foreground mt-0.5">{formatEuroPrice(settings.thresholds.blue)}/kWh</p>
+                            <p class="text-xs text-muted-foreground mt-0.5">{formatEuroPrice(settings.thresholds.cheap)}/kWh</p>
                         </div>
                     </div>
 
