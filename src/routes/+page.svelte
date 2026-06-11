@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
-    import { Settings, Maximize2, X, RotateCcw, CalendarDays, ChevronDown } from '@lucide/svelte';
+    import { Settings, Maximize2, X, RotateCcw, CalendarDays, ChevronDown, ChartColumn } from '@lucide/svelte';
     import PriceChart from '$lib/components/PriceChart.svelte';
     import CurrentPriceCard from '$lib/components/CurrentPriceCard.svelte';
     import CheapestWindowCard from '$lib/components/CheapestWindowCard.svelte';
@@ -115,133 +115,6 @@
         goto(value === today ? '/' : `?date=${value}`, { replaceState: false, noScroll: true });
     }
 
-    // ── Period overview ───────────────────────────────────────────────────────
-
-    type Period = 'dag' | 'week' | 'maand';
-    let overviewPeriod   = $state<Period>('dag');
-    let isLoadingPeriod  = $state(false);
-
-    // price cache keyed by date — direct property write avoids reactive self-loop
-    let priceCache = $state<Record<string, import('$lib/types.js').HourlyPrice[]>>({});
-    $effect(() => {
-        if (data.prices.length > 0) priceCache[data.date] = data.prices;
-    });
-
-    function isoFromDate(d: Date) {
-        return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
-    }
-
-    const periodRange = $derived.by((): { from: string; to: string } => {
-        const [y, m, d] = localDate.split('-').map(Number);
-        if (overviewPeriod === 'dag') return { from: localDate, to: localDate };
-        if (overviewPeriod === 'week') {
-            const ref = new Date(Date.UTC(y, m - 1, d));
-            const dow = ref.getUTCDay(); // 0=Sun
-            const mon = new Date(ref); mon.setUTCDate(d - ((dow + 6) % 7));
-            const sun = new Date(mon); sun.setUTCDate(mon.getUTCDate() + 6);
-            return { from: isoFromDate(mon), to: isoFromDate(sun) };
-        }
-        // maand
-        const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-        return { from: `${y}-${pad(m)}-01`, to: `${y}-${pad(m)}-${pad(last)}` };
-    });
-
-    // Fetch prices for week/month ranges when dates are missing from cache
-    $effect(() => {
-        const { from, to } = periodRange;
-        if (overviewPeriod === 'dag') return; // already in cache from page load
-
-        // Collect which dates in range still need prices
-        const missing: string[] = [];
-        const cursor = new Date(from + 'T00:00:00Z');
-        const end    = new Date(to   + 'T00:00:00Z');
-        while (cursor <= end) {
-            const iso = isoFromDate(cursor);
-            if (!priceCache[iso]) missing.push(iso);
-            cursor.setUTCDate(cursor.getUTCDate() + 1);
-        }
-        if (missing.length === 0) return;
-
-        isLoadingPeriod = true;
-        fetch(`/api/prices/range?from=${from}&to=${to}`)
-            .then((r) => r.json())
-            .then((body: { prices: Record<string, import('$lib/types.js').HourlyPrice[]> }) => {
-                // Assign per-key to avoid stale-closure overwrite and avoid reactive self-loop
-                for (const [d, prices] of Object.entries(body.prices)) priceCache[d] = prices;
-            })
-            .catch(() => { /* silently ignore — totals will just lack cost data */ })
-            .finally(() => { isLoadingPeriod = false; });
-    });
-
-    // Aggregate totals for the selected period
-    const periodTotals = $derived.by(() => {
-        if (isNavigating) return null;
-        const { from, to } = periodRange;
-
-        // Collect meter days that fall in range
-        const dayEntries = Object.entries(meterStore.data).filter(([d]) => d >= from && d <= to);
-        if (dayEntries.length === 0) return null;
-
-        let totalConsumption = 0;
-        let totalInjection   = 0;
-        let actualCost       = 0;
-        let goedkoopCost     = 0;
-        let costHours        = 0;
-        let totalHours       = 0;
-
-        for (const [date, dayData] of dayEntries) {
-            const dayPrices = priceCache[date] ?? [];
-
-            for (const m of dayData) {
-                totalConsumption += m.consumptionKwh;
-                totalInjection   += m.injectionKwh;
-                const netKwh = m.consumptionKwh - m.injectionKwh;
-                goedkoopCost += (netKwh * settings.thresholds.cheap) / 100;
-                totalHours++;
-
-                const price = dayPrices.find((p) => p.hour === m.hour);
-                if (price) {
-                    actualCost += (netKwh * price.centPerKwh) / 100;
-                    costHours++;
-                }
-            }
-        }
-
-        const netKwh         = totalConsumption - totalInjection;
-        const hasCost        = costHours > 0;
-        const costIsComplete = costHours === totalHours;
-        const savings        = goedkoopCost - actualCost;
-        const savingsPct     = hasCost && goedkoopCost !== 0 ? (savings / Math.abs(goedkoopCost)) * 100 : 0;
-        const avgCentPerKwh  = hasCost && netKwh !== 0 ? (actualCost / netKwh) * 100 : 0;
-
-        return {
-            totalConsumption: Math.round(totalConsumption * 1000) / 1000,
-            totalInjection:   Math.round(totalInjection   * 1000) / 1000,
-            netKwh:           Math.round(netKwh           * 1000) / 1000,
-            actualCost,
-            goedkoopCost,
-            savings,
-            savingsPct,
-            avgCentPerKwh,
-            hasCost,
-            costIsComplete,
-            dayCount:         dayEntries.length,
-        };
-    });
-
-    const MONTHS_NL = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
-
-    const periodLabel = $derived.by(() => {
-        if (overviewPeriod === 'dag') return null; // date already shown in chart nav
-        const { from, to } = periodRange;
-        const [fy, fm, fd] = from.split('-').map(Number);
-        const [ty, tm, td] = to.split('-').map(Number);
-        if (overviewPeriod === 'maand') return `${MONTHS_NL[fm - 1]} ${fy}`;
-        // week
-        const fromStr = `${fd} ${MONTHS_NL[fm - 1]}`;
-        const toStr   = fm === tm ? `${td} ${MONTHS_NL[tm - 1]}` : `${td} ${MONTHS_NL[tm - 1]} ${ty}`;
-        return `${fromStr} – ${toStr}`;
-    });
 </script>
 
 <svelte:head>
@@ -356,6 +229,13 @@
                 <span class="font-semibold text-lg text-foreground">Stroom</span>
             </div>
             <div class="flex items-center gap-1">
+                <a
+                    href="/stats"
+                    class="p-2 rounded-xl hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                    aria-label="Statistieken"
+                >
+                    <ChartColumn size={20} />
+                </a>
                 <a
                     href="/week"
                     class="p-2 rounded-xl hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
@@ -480,121 +360,6 @@
                 <AlertBadge {level} label={getAlertLegendLabel(level, settings.thresholds)} />
             {/each}
         </div>
-
-        <!-- Period overview (shown only when any meter data is present) -->
-        {#if meterStore.dateCount > 0}
-        <div class="bg-card rounded-2xl border shadow-sm overflow-hidden">
-
-            <!-- Header: period tabs -->
-            <div class="flex items-center justify-between px-4 py-3 border-b">
-                <div class="flex gap-1">
-                    {#each (['dag', 'week', 'maand'] as const) as p}
-                        <button
-                            onclick={() => overviewPeriod = p}
-                            class="text-xs font-medium px-2.5 py-1 rounded-lg transition-colors capitalize
-                                {overviewPeriod === p
-                                    ? 'bg-foreground text-background'
-                                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
-                        >{p}</button>
-                    {/each}
-                </div>
-                {#if periodLabel}
-                    <span class="text-xs text-muted-foreground">{periodLabel}</span>
-                {/if}
-            </div>
-
-            <!-- Body -->
-            {#if isLoadingPeriod && !periodTotals}
-                <div class="flex items-center justify-center h-32">
-                    <div class="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                </div>
-            {:else if !periodTotals}
-                <div class="flex items-center justify-center h-24 text-muted-foreground text-xs">
-                    Geen verbruiksdata voor {overviewPeriod === 'dag' ? 'deze dag' : overviewPeriod === 'week' ? 'deze week' : 'deze maand'}.
-                    Upload data via instellingen.
-                </div>
-            {:else}
-                <div class="px-4 py-4 flex flex-col gap-4">
-
-                    <!-- kWh row -->
-                    <div class="flex gap-3">
-                        <div class="flex-1">
-                            <p class="text-xs text-muted-foreground mb-0.5">Verbruik</p>
-                            <p class="font-semibold tabular-nums text-sm">{periodTotals.totalConsumption.toFixed(2)} kWh</p>
-                        </div>
-                        {#if periodTotals.totalInjection > 0}
-                        <div class="flex-1">
-                            <p class="text-xs text-muted-foreground mb-0.5">Injectie (zon)</p>
-                            <p class="font-semibold tabular-nums text-sm text-blue-500">{periodTotals.totalInjection.toFixed(2)} kWh</p>
-                        </div>
-                        {/if}
-                        <div class="flex-1">
-                            <p class="text-xs text-muted-foreground mb-0.5">Netto</p>
-                            <p class="font-semibold tabular-nums text-sm">{periodTotals.netKwh.toFixed(2)} kWh</p>
-                        </div>
-                        {#if overviewPeriod !== 'dag'}
-                        <div class="flex-1">
-                            <p class="text-xs text-muted-foreground mb-0.5">Dagen</p>
-                            <p class="font-semibold tabular-nums text-sm">{periodTotals.dayCount}</p>
-                        </div>
-                        {/if}
-                    </div>
-
-                    <!-- Cost comparison (always shown — goedkoop always available; actual cost when prices cached) -->
-                    <div class="grid grid-cols-2 gap-2">
-                        <div class="bg-accent rounded-xl p-3">
-                            <p class="text-xs text-muted-foreground mb-1">
-                                Werkelijke kost
-                                {#if !periodTotals.costIsComplete && periodTotals.hasCost}
-                                    <span class="opacity-60">(gedeeltelijk)</span>
-                                {/if}
-                            </p>
-                            {#if periodTotals.hasCost}
-                                <p class="font-bold text-xl tabular-nums {periodTotals.actualCost < 0 ? 'text-green-500' : ''}">
-                                    {periodTotals.actualCost < 0 ? '−' : ''}€{Math.abs(periodTotals.actualCost).toFixed(2)}
-                                </p>
-                            {:else}
-                                <p class="text-sm text-muted-foreground italic">–</p>
-                            {/if}
-                        </div>
-                        <div class="bg-accent rounded-xl p-3">
-                            <p class="text-xs text-muted-foreground mb-1">Bij goedkoop tarief</p>
-                            <p class="font-bold text-xl tabular-nums">
-                                {periodTotals.goedkoopCost < 0 ? '−' : ''}€{Math.abs(periodTotals.goedkoopCost).toFixed(2)}
-                            </p>
-                            <p class="text-xs text-muted-foreground mt-0.5">{formatEuroPrice(settings.thresholds.cheap)}/kWh</p>
-                        </div>
-                    </div>
-
-                    <!-- Savings + avg price (only when we have actual cost data) -->
-                    {#if periodTotals.hasCost}
-                    <div class="flex gap-3">
-                        <div class="flex-1">
-                            <p class="text-xs text-muted-foreground mb-0.5">Besparing vs goedkoop</p>
-                            <p class="font-semibold tabular-nums text-sm {periodTotals.savings >= 0 ? 'text-green-500' : 'text-red-400'}">
-                                {periodTotals.savings >= 0 ? '+' : '−'}€{Math.abs(periodTotals.savings).toFixed(2)}
-                                <span class="text-xs font-normal opacity-70">({periodTotals.savings >= 0 ? '+' : ''}{periodTotals.savingsPct.toFixed(0)}%)</span>
-                            </p>
-                        </div>
-                        <div class="flex-1">
-                            <p class="text-xs text-muted-foreground mb-0.5">Gem. prijs betaald</p>
-                            <p class="font-semibold tabular-nums text-sm">{formatEuroPrice(periodTotals.avgCentPerKwh)}/kWh</p>
-                        </div>
-                    </div>
-                    {/if}
-
-                    <!-- Loading indicator while prices complete in background -->
-                    {#if isLoadingPeriod}
-                    <div class="flex items-center gap-2 text-xs text-muted-foreground">
-                        <div class="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
-                        Prijzen laden…
-                    </div>
-                    {/if}
-
-                </div>
-            {/if}
-        </div>
-        {/if}
 
     </div>
 </div>
