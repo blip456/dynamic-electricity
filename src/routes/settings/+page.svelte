@@ -372,7 +372,7 @@
                 Prijsbron: EPEX Spot Belgium (Belpex). Prijzen in €/kWh (euro per kilowattuur), exclusief vaste kosten.
             </p>
             <p class="text-xs text-center text-muted-foreground/60 font-mono">
-                v{__APP_VERSION__}
+                v{__APP_VERSION__} · build {__APP_BUILD__}
             </p>
         </div>
 
