@@ -53,6 +53,7 @@ npm run dev
 | `npm run preview` | Preview the production build                   |
 | `npm run check`   | `svelte-check` type checking (also runs pre-push) |
 | `npm run icons`   | Regenerate PWA icons from `static/icons/icon.svg` |
+| `npm run release` | Cut a release locally (`release:beta` for prereleases, `release:dry` to preview) |
 
 ### Environment variables
 
@@ -100,14 +101,16 @@ src/
 ## Branching, versioning & releases
 
 This repo uses [Conventional Commits](https://www.conventionalcommits.org)
-with automated [semantic versioning](https://semver.org) via semantic-release.
-Commit messages are enforced locally (husky + commitlint) and in CI.
+with [semantic versioning](https://semver.org), designed to run entirely on
+**free GitHub + free Vercel** — no GitHub Actions, no paid CI:
 
-- `feat:` → minor bump · `fix:`/`perf:` → patch bump ·
-  `feat!:`/`BREAKING CHANGE:` → major bump
-- Feature branches → PR into `dev` (runs CI + preview deployment)
-- `dev` → beta prereleases (`x.y.z-beta.n`)
-- `main` → stable releases + production deployment
+- Commit messages are enforced locally by git hooks (husky + commitlint);
+  `pre-push` runs the type check.
+- Releases are cut locally with `npm run release` (or `release:beta`),
+  which bumps `package.json`, updates `CHANGELOG.md`, commits and tags —
+  all derived from the commit messages since the last release.
+- Pushing the release commit makes Vercel deploy it, and the version
+  (e.g. `0.1.1-beta.0`) shows up in the settings-page footer.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow, commit-message
-examples, and the one-time `main`-branch setup.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow and
+commit-message examples.
