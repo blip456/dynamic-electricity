@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
-    import { Settings, Maximize2, X, RotateCcw, CalendarDays } from '@lucide/svelte';
+    import { Settings, Maximize2, X, RotateCcw, CalendarDays, ChevronDown } from '@lucide/svelte';
     import PriceChart from '$lib/components/PriceChart.svelte';
     import CurrentPriceCard from '$lib/components/CurrentPriceCard.svelte';
     import CheapestWindowCard from '$lib/components/CheapestWindowCard.svelte';
@@ -103,6 +103,16 @@
         localDate    = today;
         isNavigating = true;
         goto('/', { replaceState: false, noScroll: true });
+    }
+
+    // Date picker: an invisible <input type="date"> overlays the date label,
+    // so tapping it opens the platform's native picker.
+    function pickDate(e: Event) {
+        const value = (e.currentTarget as HTMLInputElement).value;
+        if (!value || value === localDate) return;
+        localDate    = value;
+        isNavigating = true;
+        goto(value === today ? '/' : `?date=${value}`, { replaceState: false, noScroll: true });
     }
 
     // ── Period overview ───────────────────────────────────────────────────────
@@ -262,7 +272,19 @@
                         Vandaag
                     </button>
                 {/if}
-                <span class="text-sm font-medium text-foreground">{dateLabel}</span>
+                <span class="relative inline-flex items-center gap-1 text-sm font-medium text-foreground">
+                        {dateLabel}
+                        <ChevronDown size={14} class="text-muted-foreground" />
+                        <input
+                            type="date"
+                            value={localDate}
+                            min="2022-01-01"
+                            max={tomorrow}
+                            onchange={pickDate}
+                            aria-label="Kies een datum"
+                            class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                    </span>
                 <button
                     onclick={() => navigate(1)}
                     class="p-2 rounded-xl hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
@@ -381,7 +403,19 @@
                             Vandaag
                         </button>
                     {/if}
-                    <span class="text-sm font-medium text-foreground">{dateLabel}</span>
+                    <span class="relative inline-flex items-center gap-1 text-sm font-medium text-foreground">
+                        {dateLabel}
+                        <ChevronDown size={14} class="text-muted-foreground" />
+                        <input
+                            type="date"
+                            value={localDate}
+                            min="2022-01-01"
+                            max={tomorrow}
+                            onchange={pickDate}
+                            aria-label="Kies een datum"
+                            class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                    </span>
                 </div>
 
                     <button
