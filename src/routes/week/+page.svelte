@@ -3,6 +3,7 @@
     import { ArrowLeft } from '@lucide/svelte';
     import { trackEvent } from '$lib/analytics.js';
     import AlertBadge from '$lib/components/AlertBadge.svelte';
+    import Seo from '$lib/components/Seo.svelte';
     import { settings } from '$lib/stores.svelte.js';
     import {
         getAlertLevel,
@@ -70,9 +71,10 @@
     }
 </script>
 
-<svelte:head>
-    <title>Stroom — Weekoverzicht</title>
-</svelte:head>
+<Seo
+    title="Weekoverzicht stroomprijzen per uur (Belpex) | Stroom"
+    description="Bekijk de dynamische elektriciteitsprijzen van de hele week in één heatmap: per dag en per uur, gebaseerd op de Belpex day-ahead prijzen voor België."
+/>
 
 <div class="min-h-screen bg-background">
     <div class="mx-auto max-w-2xl px-4 py-6 pb-safe flex flex-col gap-5">

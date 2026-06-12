@@ -1,5 +1,6 @@
 <script lang="ts">
     import { ArrowLeft, TrendingUp, TrendingDown, Upload } from '@lucide/svelte';
+    import Seo from '$lib/components/Seo.svelte';
     import { settings } from '$lib/stores.svelte.js';
     import { meterStore } from '$lib/meterStore.svelte.js';
     import { priceStore } from '$lib/priceStore.svelte.js';
@@ -230,9 +231,10 @@
     const hasData = $derived(Object.keys(dayStats).length > 0);
 </script>
 
-<svelte:head>
-    <title>Stroom — Statistieken</title>
-</svelte:head>
+<Seo
+    title="Bespaar met je dynamisch energiecontract — statistieken | Stroom"
+    description="Analyseer je besparing met dynamische stroomprijzen: koppel je Fluvius-verbruiksdata en zie wat je verbruik per dag, week of maand kostte tegenover een vast tarief."
+/>
 
 <div class="min-h-screen bg-background">
     <div class="mx-auto max-w-2xl px-4 py-6 pb-safe flex flex-col gap-5">
