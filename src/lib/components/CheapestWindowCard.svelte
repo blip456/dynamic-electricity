@@ -2,6 +2,7 @@
     import type { HourlyPrice, Thresholds } from '$lib/types.js';
     import { findCheapestWindow, getAlertLevel, formatEuroPrice } from '$lib/priceUtils.js';
     import { settings } from '$lib/stores.svelte.js';
+    import { trackEvent } from '$lib/analytics.js';
 
     let {
         prices,
@@ -42,7 +43,7 @@
         <div class="flex gap-1">
             {#each [1, 2, 3, 4] as h}
                 <button
-                    onclick={() => settings.windowHours = h}
+                    onclick={() => { settings.windowHours = h; trackEvent('cheapest_window_hours', { hours: h }); }}
                     class="text-xs font-medium px-2 py-1 rounded-lg transition-colors tabular-nums
                         {settings.windowHours === h
                             ? 'bg-foreground text-background'

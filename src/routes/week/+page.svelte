@@ -1,6 +1,7 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
     import { ArrowLeft } from '@lucide/svelte';
+    import { trackEvent } from '$lib/analytics.js';
     import AlertBadge from '$lib/components/AlertBadge.svelte';
     import { settings } from '$lib/stores.svelte.js';
     import {
@@ -45,6 +46,7 @@
         const next = new Date(Date.UTC(y, m - 1, d + dir * 7));
         const iso  = `${next.getUTCFullYear()}-${pad(next.getUTCMonth() + 1)}-${pad(next.getUTCDate())}`;
         selected = null;
+        trackEvent('week_navigate', { week: iso });
         goto(`/week?week=${iso}`, { noScroll: true });
     }
 

@@ -6,6 +6,7 @@
     import { parseFluviusCsv } from '$lib/fluviusParser.js';
     import { subscribeToPush, unsubscribeFromPush, getNotificationPermission } from '$lib/notifications.js';
     import { formatEuroPrice, ALERT_NAMES } from '$lib/priceUtils.js';
+    import { trackEvent } from '$lib/analytics.js';
 
     let { data } = $props();
 
@@ -30,11 +31,13 @@
             if (settings.notificationsEnabled) {
                 await unsubscribeFromPush();
                 settings.notificationsEnabled = false;
+                trackEvent('notifications_toggle', { enabled: false });
             } else {
                 const ok = await subscribeToPush(data.vapidPublicKey, settings.thresholds);
                 if (ok) {
                     settings.notificationsEnabled = true;
                     permissionState = await getNotificationPermission();
+                    trackEvent('notifications_toggle', { enabled: true });
                 } else {
                     notifStatus = 'error';
                     return;
@@ -60,6 +63,7 @@
                 body: JSON.stringify({ subscription: sub.toJSON() })
             });
             testStatus = res.ok ? 'success' : 'error';
+            trackEvent('notification_test', { success: res.ok });
         } catch {
             testStatus = 'error';
         }
@@ -88,15 +92,18 @@
             if (result.fileType === 'dagtotalen') {
                 uploadStatus = 'error';
                 uploadMsg    = 'Dit is een dagtotalen-bestand. Onze app heeft kwartiertotalen nodig voor uurlijkse grafieken. Exporteer opnieuw via Mijn Fluvius en kies "kwartiertotalen".';
+                trackEvent('fluvius_import', { status: 'error', reason: 'dagtotalen' });
                 return;
             }
             if (result.daysFound === 0) {
                 uploadStatus = 'error';
                 uploadMsg    = 'Geen geldige Fluvius-data gevonden in het bestand.';
+                trackEvent('fluvius_import', { status: 'error', reason: 'no_data' });
                 return;
             }
             meterStore.merge(result.data);
             uploadStatus = 'success';
+            trackEvent('fluvius_import', { status: 'success', days: result.daysFound });
             const range  = result.dateFrom && result.dateTo
                 ? ` (${formatDate(result.dateFrom)} – ${formatDate(result.dateTo)})`
                 : '';
@@ -107,6 +114,7 @@
         } catch {
             uploadStatus = 'error';
             uploadMsg    = 'Bestand kon niet worden verwerkt.';
+            trackEvent('fluvius_import', { status: 'error', reason: 'parse_failed' });
         }
         // Reset file input so the same file can be re-imported
         (e.target as HTMLInputElement).value = '';
@@ -219,7 +227,7 @@
                     Drempelwaarden (€/kWh)
                 </h2>
                 <button
-                    onclick={() => settings.reset()}
+                    onclick={() => { settings.reset(); trackEvent('thresholds_reset'); }}
                     class="text-xs px-2.5 py-1 rounded-lg bg-accent hover:bg-border text-muted-foreground hover:text-foreground transition-colors"
                 >
                     Standaard herstellen
@@ -338,7 +346,7 @@
                             </p>
                         </div>
                         <button
-                            onclick={() => { meterStore.clear(); uploadStatus = 'idle'; }}
+                            onclick={() => { meterStore.clear(); uploadStatus = 'idle'; trackEvent('fluvius_clear'); }}
                             class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
                         >
                             <Trash2 size={12} />
