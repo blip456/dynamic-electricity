@@ -140,12 +140,36 @@
             }
         };
 
+        // Dashed gray marker at the day's average price (mean of the bars),
+        // drawn over the datasets so it stays visible on top of the bars.
+        const avgLinePlugin = {
+            id: 'avgLine',
+            afterDatasetsDraw(chart: any) {
+                const data = chart.data.datasets[0]?.data as number[] | undefined;
+                if (!data || data.length === 0) return;
+                const avg = data.reduce((s, v) => s + v, 0) / data.length;
+                const y = chart.scales['y'].getPixelForValue(avg);
+                const { left, right, top, bottom } = chart.chartArea;
+                if (y < top || y > bottom) return;
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.strokeStyle = 'rgba(100, 116, 139, 0.65)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.moveTo(left, y);
+                ctx.lineTo(right, y);
+                ctx.stroke();
+                ctx.restore();
+            }
+        };
+
         const { data, labels, bgColors, borderColors, borderWidths } = buildDataset();
         const lineData = consumptionLine();
         const hasLine  = lineData.some((v) => v !== null);
 
         chart = new Chart(canvas, {
-            plugins: [alignZeroPlugin],
+            plugins: [alignZeroPlugin, avgLinePlugin],
             data: {
                 labels,
                 datasets: [
