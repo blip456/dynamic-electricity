@@ -2,8 +2,5 @@ import type { LayoutServerLoad } from './$types';
 import { env } from '$env/dynamic/public';
 
 export const load: LayoutServerLoad = async () => {
-    return {
-        vapidPublicKey: env.PUBLIC_VAPID_KEY ?? '',
-        gaMeasurementId: env.PUBLIC_GA_MEASUREMENT_ID ?? ''
-    };
+    return { vapidPublicKey: env.PUBLIC_VAPID_KEY ?? '' };
 };
