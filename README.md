@@ -59,7 +59,8 @@ npm run dev
 ### Environment variables
 
 See [.env.example](.env.example) for the full annotated list: VAPID keys for
-web push, optional `ENTSOE_API_KEY`, `CRON_SECRET`, and Vercel KV credentials
+web push, optional `PUBLIC_GA_MEASUREMENT_ID` (Google Analytics 4),
+`ENTSOE_API_KEY`, `CRON_SECRET`, and Vercel KV credentials
 (auto-injected on Vercel; an in-memory fallback is used locally).
 
 ## Project structure

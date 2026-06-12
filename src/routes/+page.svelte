@@ -8,6 +8,7 @@
     import AlertBadge from '$lib/components/AlertBadge.svelte';
     import { settings } from '$lib/stores.svelte.js';
     import { meterStore } from '$lib/meterStore.svelte.js';
+    import { trackEvent } from '$lib/analytics.js';
     import {
         getTodayBelgian,
         getTomorrowBelgian,
@@ -65,6 +66,7 @@
 
     async function openFullscreen() {
         fullscreen = true;
+        trackEvent('chart_fullscreen_open');
         updateOrientation();
         try {
             await (screen.orientation as unknown as { lock(o: string): Promise<void> }).lock('landscape');
@@ -96,12 +98,14 @@
         const newDate = `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
         localDate    = newDate;
         isNavigating = true;
+        trackEvent('date_navigate', { method: 'arrow', date: newDate });
         goto(`?date=${newDate}`, { replaceState: false, noScroll: true });
     }
 
     function goToday() {
         localDate    = today;
         isNavigating = true;
+        trackEvent('date_navigate', { method: 'today', date: today });
         goto('/', { replaceState: false, noScroll: true });
     }
 
@@ -112,6 +116,7 @@
         if (!value || value === localDate) return;
         localDate    = value;
         isNavigating = true;
+        trackEvent('date_navigate', { method: 'picker', date: value });
         goto(value === today ? '/' : `?date=${value}`, { replaceState: false, noScroll: true });
     }
 
