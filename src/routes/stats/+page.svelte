@@ -5,6 +5,7 @@
     import { priceStore } from '$lib/priceStore.svelte.js';
     import { computeDaySavings, aggregateSavings, mondayOf, type DaySavings } from '$lib/savings.js';
     import { getTodayBelgian, formatEuroPrice } from '$lib/priceUtils.js';
+    import { trackEvent } from '$lib/analytics.js';
 
     const today = getTodayBelgian();
     const pad   = (n: number) => String(n).padStart(2, '0');
@@ -277,7 +278,7 @@
                     <div class="flex gap-1">
                         {#each (['dag', 'week', 'maand'] as const) as p}
                             <button
-                                onclick={() => overviewPeriod = p}
+                                onclick={() => { overviewPeriod = p; trackEvent('stats_period', { period: p }); }}
                                 class="text-xs font-medium px-2.5 py-1 rounded-lg transition-colors capitalize
                                     {overviewPeriod === p
                                         ? 'bg-foreground text-background'
@@ -447,7 +448,7 @@
                     <div class="flex gap-1">
                         {#each (['week', 'maand'] as const) as m}
                             <button
-                                onclick={() => trendMode = m}
+                                onclick={() => { trendMode = m; trackEvent('stats_trend_mode', { mode: m }); }}
                                 class="text-xs font-medium px-2.5 py-1 rounded-lg transition-colors capitalize
                                     {trendMode === m
                                         ? 'bg-foreground text-background'

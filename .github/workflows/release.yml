@@ -1,0 +1,68 @@
+name: Release
+
+# Cuts a release automatically on every merge to main: bumps the minor
+# version, regenerates CHANGELOG.md from the conventional commits since the
+# last tag, commits as "chore(release): x.y.z", tags vx.y.z, pushes (which
+# triggers the production deployment), and syncs the release back to dev.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # The release push itself must never trigger another release
+    if: "!startsWith(github.event.head_commit.message, 'chore(release)')"
+    runs-on: ubuntu-latest
+    env:
+      HUSKY: 0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history and tags — needed to compute the changelog range
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Restore a missing tag for the current version
+        # Self-heals when a release commit exists but its tag never reached
+        # GitHub (e.g. a local release whose tag push failed). Without the
+        # tag, the next changelog would regenerate the entire history.
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -z "$(git tag -l "v$VERSION")" ]; then
+            COMMIT=$(git log -1 --format=%H --grep="^chore(release): $VERSION$")
+            if [ -n "$COMMIT" ]; then
+              git tag "v$VERSION" "$COMMIT"
+              git push origin "v$VERSION"
+            fi
+          fi
+
+      - name: Cut release (minor bump + changelog + tag)
+        run: npx commit-and-tag-version --release-as minor
+
+      - name: Push release commit and tag
+        run: git push --follow-tags origin main
+
+      - name: Sync release back to dev
+        # Best effort — a conflict here shouldn't fail the release; merge
+        # main into dev manually if this step is skipped.
+        continue-on-error: true
+        run: |
+          git fetch origin dev
+          git checkout -B dev origin/dev
+          git merge --no-edit main
+          git push origin dev

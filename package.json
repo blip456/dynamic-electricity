@@ -1,11 +1,11 @@
 {
     "name": "electricity-watchdog",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "private": true,
     "type": "module",
     "repository": {
         "type": "git",
-        "url": "https://github.com/blip456/dynamic-electricity.git"
+        "url": "https://github.com/blip456/stroom.git"
     },
     "engines": {
         "node": ">=22"
@@ -19,7 +19,6 @@
         "release": "commit-and-tag-version --release-as minor",
         "release:beta": "commit-and-tag-version --release-as minor --prerelease beta",
         "release:dry": "commit-and-tag-version --release-as minor --dry-run",
-        "deploy": "npm run release && git push --follow-tags origin dev",
         "prepare": "husky"
     },
     "devDependencies": {
