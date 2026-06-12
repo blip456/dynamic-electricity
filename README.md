@@ -53,6 +53,7 @@ npm run dev
 | `npm run preview` | Preview the production build                   |
 | `npm run check`   | `svelte-check` type checking (also runs pre-push) |
 | `npm run icons`   | Regenerate PWA icons from `static/icons/icon.svg` |
+| `npm run deploy`  | Release (auto minor bump + changelog + tag) and push `dev` |
 | `npm run release:dry` | Preview the next release (version bump + changelog) without changing anything |
 
 ### Environment variables
@@ -101,16 +102,17 @@ src/
 ## Branching, versioning & releases
 
 This repo uses [Conventional Commits](https://www.conventionalcommits.org)
-with [semantic versioning](https://semver.org). Releases are fully
-automatic — no manual version bumps or tags:
+with [semantic versioning](https://semver.org), designed to run entirely on
+**free GitHub + free Vercel** — no GitHub Actions, no paid CI:
 
 - Commit messages are enforced locally by git hooks (husky + commitlint);
   `pre-push` runs the type check.
-- Ship by merging `dev` into `main`: the release workflow
-  ([.github/workflows/release.yml](.github/workflows/release.yml)) bumps the
-  **minor** version, updates `CHANGELOG.md` from the commit messages since
-  the last release, commits, tags `vx.y.z`, pushes — which triggers the
-  production deployment — and merges the release commit back into `dev`.
+- Release with `npm run deploy`: it bumps the **minor** version, updates
+  `CHANGELOG.md` from the commit messages since the last release, commits,
+  tags `vx.y.z`, and pushes `dev` with tags — the version number is computed
+  automatically, no manual tagging.
+- Deploy to production by merging `dev` into `main` (PR) — Vercel builds the
+  release commit with the new version baked in.
 - The deployed version (e.g. `v0.2.0`) shows in the settings-page footer,
   and the changelog is readable in-app at `/changelog`.
 

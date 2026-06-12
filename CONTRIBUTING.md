@@ -1,9 +1,8 @@
 # Contributing
 
-This project is set up to run on the **free tiers** of GitHub and Vercel.
-Quality gates run locally via git hooks, Vercel's build is the deploy check,
-and a single GitHub Actions workflow cuts releases automatically on merge to
-`main`.
+This project is set up to run entirely on the **free tiers** of GitHub and
+Vercel: there are no GitHub Actions workflows. Quality gates run locally via
+git hooks, releases are cut locally, and Vercel's build is the deploy check.
 
 ## Branching strategy
 
@@ -12,8 +11,8 @@ and a single GitHub Actions workflow cuts releases automatically on merge to
 - Develop on short-lived feature branches and open a PR into `dev`; every
   branch push gets a free Vercel **preview deployment** to click around in
   before merging.
-- Promote `dev → main` via a PR to release — the release workflow takes it
-  from there (see below).
+- Promote `dev → main` via a PR to deploy a release to production (see
+  below).
 
 ## Conventional Commits
 
@@ -54,30 +53,33 @@ Bypass in an emergency with `git commit --no-verify` / `git push --no-verify`.
 regardless of commit types — commit types still determine how entries are
 grouped in the changelog.
 
-Releases are automatic: merge `dev` into `main` (via a PR) and the release
-workflow ([.github/workflows/release.yml](.github/workflows/release.yml))
-does the rest:
-
-1. `commit-and-tag-version` reads the conventional commits since the last
-   tag, bumps `package.json`/`package-lock.json`, and prepends the release
-   notes to `CHANGELOG.md`;
-2. the result is committed as `chore(release): x.y.z`, tagged `vx.y.z`, and
-   pushed to `main` — which triggers the production deployment of the
-   release commit;
-3. the release commit is merged back into `dev` so versions stay in sync
-   (best effort — merge `main` into `dev` manually if that step reports a
-   conflict).
-
-To preview what the next release would look like, run locally:
+The version number is computed automatically from the commits — never edit
+it or create tags by hand. Run the release from an up-to-date `dev` on your
+own machine:
 
 ```bash
-npm run release:dry    # version bump + changelog preview, changes nothing
+npm run deploy         # release + push dev in one go
 ```
 
-The deployment bakes the new version into the app — it appears in the
-settings-page footer as `v0.2.0 · build <sha>`, and the full `CHANGELOG.md`
-is rendered in-app at `/changelog` ("Wat is er nieuw", linked from the
-settings footer).
+or step by step:
+
+```bash
+npm run release:dry    # preview: version bump + changelog, changes nothing
+npm run release:beta   # prerelease of the next minor: 0.2.0-beta.0, -beta.1, …
+npm run release        # next minor: 0.2.0
+git push --follow-tags origin dev
+```
+
+`commit-and-tag-version` reads the conventional commits since the last tag,
+bumps `package.json`/`package-lock.json`, prepends the release notes to
+`CHANGELOG.md`, commits (`chore(release): x.y.z`) and tags `vx.y.z`.
+
+Then merge `dev` into `main` (PR) to deploy to production. The build bakes
+the new version into the app — it appears in the settings-page footer as
+`v0.2.0 · build <sha>`, and the full `CHANGELOG.md` is rendered in-app at
+`/changelog` ("Wat is er nieuw", linked from the settings footer). GitHub's
+Releases page isn't used, since publishing there would require CI or manual
+steps.
 
 ## Vercel (Hobby plan) notes
 
