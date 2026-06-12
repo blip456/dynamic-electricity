@@ -7,6 +7,7 @@
     import { subscribeToPush, unsubscribeFromPush, getNotificationPermission } from '$lib/notifications.js';
     import { formatEuroPrice, ALERT_NAMES } from '$lib/priceUtils.js';
     import { trackEvent } from '$lib/analytics.js';
+    import Seo from '$lib/components/Seo.svelte';
 
     let { data } = $props();
 
@@ -121,9 +122,11 @@
     }
 </script>
 
-<svelte:head>
-    <title>Instellingen — Stroom</title>
-</svelte:head>
+<Seo
+    title="Instellingen | Stroom"
+    description="Stel prijswaarschuwingen en drempelwaarden in en importeer je Fluvius-verbruiksdata."
+    noindex
+/>
 
 <div class="min-h-screen bg-background">
     <div class="mx-auto max-w-2xl px-4 py-6 flex flex-col gap-6">

@@ -6,6 +6,7 @@
     import CurrentPriceCard from '$lib/components/CurrentPriceCard.svelte';
     import CheapestWindowCard from '$lib/components/CheapestWindowCard.svelte';
     import AlertBadge from '$lib/components/AlertBadge.svelte';
+    import Seo from '$lib/components/Seo.svelte';
     import { settings } from '$lib/stores.svelte.js';
     import { meterStore } from '$lib/meterStore.svelte.js';
     import { trackEvent } from '$lib/analytics.js';
@@ -122,8 +123,24 @@
 
 </script>
 
+<Seo
+    title="Dynamische stroomprijzen per uur in België — vandaag & morgen | Stroom"
+    description="Volg de dynamische elektriciteitsprijzen (Belpex / EPEX Spot) per uur in België. Zie wanneer stroom goedkoop, bijna gratis of zelfs negatief is, vind het goedkoopste blok en bespaar met je dynamisch energiecontract."
+    keywords="dynamische stroomprijzen, elektriciteitsprijs per uur, Belpex, EPEX Spot België, dynamisch energiecontract, dynamische energieprijzen vandaag, goedkoopste uren stroom, negatieve stroomprijzen, uurprijzen elektriciteit België"
+/>
+
 <svelte:head>
-    <title>Stroom — Stroomprijzen</title>
+    {@html '<script type="application/ld+json">' + JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'WebApplication',
+        name: 'Stroom',
+        applicationCategory: 'UtilitiesApplication',
+        operatingSystem: 'Web',
+        inLanguage: 'nl-BE',
+        description:
+            'Gratis web-app die de dynamische stroomprijzen (Belpex day-ahead) per uur toont voor België, met prijswaarschuwingen en een planner voor de goedkoopste uren.',
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' }
+    }) + '<\/script>'}
 </svelte:head>
 
 <!-- ─── Fullscreen overlay ───────────────────────────────────────────────── -->
@@ -231,7 +248,7 @@
                         <path d="M13 2 L4.5 13.5 H11 L11 22 L19.5 10.5 H13 Z" />
                     </svg>
                 </div>
-                <span class="font-semibold text-lg text-foreground">Stroom</span>
+                <h1 class="font-semibold text-lg text-foreground">Stroom</h1>
             </div>
             <div class="flex items-center gap-1">
                 <a
@@ -365,6 +382,27 @@
                 <AlertBadge {level} label={getAlertLegendLabel(level, settings.thresholds)} />
             {/each}
         </div>
+
+        <!-- Info / SEO copy -->
+        <section class="flex flex-col gap-2 pt-2 text-xs text-muted-foreground leading-relaxed">
+            <h2 class="text-sm font-medium text-foreground">Dynamische stroomprijzen in België</h2>
+            <p>
+                Met een dynamisch energiecontract volgt je elektriciteitsprijs de uurprijzen van de
+                Belgische groothandelsmarkt Belpex (EPEX Spot Belgium). Elke namiddag worden de
+                day-ahead prijzen voor morgen bekendgemaakt — die zie je hier meteen, uur per uur.
+            </p>
+            <p>
+                Stroom toont de stroomprijs per uur voor vandaag en morgen, stuurt prijswaarschuwingen
+                bij goedkope, bijna gratis of zelfs negatieve stroomprijzen, en vindt het goedkoopste
+                blok om je wasmachine, droogkast, warmtepomp of elektrische auto te laten draaien.
+                Zo verschuif je je verbruik naar de goedkoopste uren en bespaar je op je energiefactuur.
+            </p>
+            <p>
+                Gratis te gebruiken met elk dynamisch contract in Vlaanderen, Brussel en Wallonië.
+                Koppel je verbruiksdata van de digitale meter (Mijn Fluvius) en zie precies wat elk
+                uur je kost.
+            </p>
+        </section>
 
     </div>
 </div>

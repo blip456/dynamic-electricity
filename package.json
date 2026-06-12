@@ -19,6 +19,7 @@
         "release": "commit-and-tag-version --release-as minor",
         "release:beta": "commit-and-tag-version --release-as minor --prerelease beta",
         "release:dry": "commit-and-tag-version --release-as minor --dry-run",
+        "deploy": "npm run release && git push --follow-tags origin dev",
         "prepare": "husky"
     },
     "devDependencies": {

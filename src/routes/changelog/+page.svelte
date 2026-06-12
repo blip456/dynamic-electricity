@@ -1,12 +1,14 @@
 <script lang="ts">
     import { ArrowLeft } from '@lucide/svelte';
+    import Seo from '$lib/components/Seo.svelte';
 
     let { data } = $props();
 </script>
 
-<svelte:head>
-    <title>Stroom — Wat is er nieuw</title>
-</svelte:head>
+<Seo
+    title="Wat is er nieuw | Stroom"
+    description="Alle updates van Stroom, de gratis app voor dynamische stroomprijzen in België: nieuwe functies, verbeteringen en fixes per release."
+/>
 
 <div class="min-h-screen bg-background">
     <div class="mx-auto max-w-2xl px-4 py-6 pb-safe flex flex-col gap-5">
