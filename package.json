@@ -5,7 +5,7 @@
     "type": "module",
     "repository": {
         "type": "git",
-        "url": "https://github.com/blip456/dynamic-electricity.git"
+        "url": "https://github.com/blip456/stroom.git"
     },
     "engines": {
         "node": ">=22"
