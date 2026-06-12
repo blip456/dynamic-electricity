@@ -335,11 +335,24 @@
             updateChart();
         }
 
+        // Chart.js onHover only fires while the pointer moves inside the
+        // canvas, so the last hovered bar stays highlighted when the mouse
+        // leaves. Clear hover state on mouseleave — pinned (tapped) bars are
+        // intentionally left alone, and on touch devices hoveredBar is
+        // already -1 after touchend, so a synthetic mouseleave is a no-op.
+        function onMouseLeave() {
+            if (hoveredBar < 0) return;
+            hoveredBar = -1;
+            syncPrice();
+            updateChart();
+        }
+
         canvas.addEventListener('touchstart', onTouchStart,           { passive: true });
         canvas.addEventListener('touchmove',  onTouchMove,            { passive: true });
         canvas.addEventListener('touchend',   onTouchEnd,             { passive: true });
         canvas.addEventListener('touchend',   onTouchEndTime,         { passive: true });
         canvas.addEventListener('click',      onClick);
+        canvas.addEventListener('mouseleave', onMouseLeave);
         document.addEventListener('touchstart', onDocumentTouchStart, { passive: true });
 
         return () => {
@@ -348,6 +361,7 @@
             canvas.removeEventListener('touchend',   onTouchEnd);
             canvas.removeEventListener('touchend',   onTouchEndTime);
             canvas.removeEventListener('click',      onClick);
+            canvas.removeEventListener('mouseleave', onMouseLeave);
             document.removeEventListener('touchstart', onDocumentTouchStart);
             chart?.destroy();
         };
