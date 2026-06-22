@@ -5,6 +5,7 @@
     import PriceChart from '$lib/components/PriceChart.svelte';
     import CurrentPriceCard from '$lib/components/CurrentPriceCard.svelte';
     import CheapestWindowCard from '$lib/components/CheapestWindowCard.svelte';
+    import DayStatsCard from '$lib/components/DayStatsCard.svelte';
     import AlertBadge from '$lib/components/AlertBadge.svelte';
     import Seo from '$lib/components/Seo.svelte';
     import { settings } from '$lib/stores.svelte.js';
@@ -365,6 +366,17 @@
                 {/if}
             </div>
         </div>
+
+        <!-- Daily analytics: cost actual vs fixed (only when meter data exists for this day) -->
+        {#if !isNavigating && !data.error && data.prices.length > 0}
+            <DayStatsCard
+                date={data.date}
+                prices={data.prices}
+                meter={meterStore.forDate(data.date)}
+                thresholds={settings.thresholds}
+                {isToday}
+            />
+        {/if}
 
         <!-- Cheapest-window planner -->
         {#if !isNavigating && !data.error && data.prices.length > 0}
